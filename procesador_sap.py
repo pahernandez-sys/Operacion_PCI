@@ -26,46 +26,54 @@ def procesar_sap_colab_final():
     try:
         print(f"🔄 Procesando {archivo_entrada}...")
         contenido_archivo = io.BytesIO(uploaded[archivo_entrada])
-
         excel_file = pd.ExcelFile(contenido_archivo)
         nombres_hojas = excel_file.sheet_names
         
-        if len(nombres_hojas) < 2:
-            print(f"❌ El archivo debe tener al menos 2 pestañas. Encontradas: {len(nombres_hojas)}")
+        dfs_a_concatenar = []
+
+        # Iteramos por las primeras 2 hojas por posición
+        for i in range(min(2, len(nombres_hojas))):
+            try:
+                # Leemos la hoja completa sin restricciones de columnas primero
+                df_temp = pd.read_excel(excel_file, sheet_name=i, header=None)
+                
+                if df_temp.empty:
+                    print(f"⚠️ Hoja {i+1} ('{nombres_hojas[i]}') está vacía. Saltando...")
+                    continue
+
+                # Aseguramos que tenga 7 columnas (A-G) para no romper la lógica de índices
+                for col_idx in range(7):
+                    if col_idx not in df_temp.columns:
+                        df_temp[col_idx] = None
+                
+                # Nos quedamos solo con las columnas A-G (0 a 6)
+                dfs_a_concatenar.append(df_temp.iloc[:, 0:7])
+                print(f"✅ Hoja {i+1} ('{nombres_hojas[i]}') cargada correctamente.")
+                
+            except Exception as e:
+                print(f"⚠️ No se pudo procesar la hoja {i+1}: {e}")
+
+        if not dfs_a_concatenar:
+            print("❌ No se encontró información válida en ninguna de las hojas.")
             return
 
-        print(f"📖 Leyendo Hoja 1: '{nombres_hojas[0]}' y Hoja 2: '{nombres_hojas[1]}'")
-        
-        # --- SOLUCIÓN AL ERROR DE COLUMNAS ---
-        # Leemos sin 'usecols' primero para evitar el error de límites
-        df_fo_raw = pd.read_excel(excel_file, sheet_name=0, header=None)
-        df_cu_raw = pd.read_excel(excel_file, sheet_name=1, header=None)
-
-        # Forzamos que tengan al menos 7 columnas (A a la G) rellenando con vacío si faltan
-        def asegurar_columnas(df):
-            for i in range(7):
-                if i not in df.columns:
-                    df[i] = None
-            return df.iloc[:, 0:7] # Retornamos exactamente de A a G
-
-        df_fo = asegurar_columnas(df_fo_raw)
-        df_cu = asegurar_columnas(df_cu_raw)
-        # --------------------------------------
-
-        raw_data = pd.concat([df_fo, df_cu], ignore_index=True).dropna(how='all')
+        # Unimos la información encontrada
+        raw_data = pd.concat(dfs_a_concatenar, ignore_index=True).dropna(how='all')
 
         mapeo_datos = {}
         tecnico_actual = None
         area_actual = "GENERAL"
 
         for _, row in raw_data.iterrows():
-            # Validación de seguridad para filas vacías o incompletas
+            # Saltar filas que no tengan suficientes columnas
             if len(row) < 4: continue 
 
+            # Lógica de detección de Área
             if pd.isna(row[1]) and pd.isna(row[3]) and pd.notna(row[0]):
                 area_actual = str(row[0]).replace("COBRE ", "").strip()
                 continue
 
+            # Saltar si no hay código de ítem
             if pd.isna(row[3]) or str(row[3]).lower() == "nan": continue
 
             nombre = str(row[0]).strip() if pd.notna(row[0]) else tecnico_actual
@@ -95,13 +103,13 @@ def procesar_sap_colab_final():
 
             mapeo_datos[clave]["Lines"].append({"ItemCode": item_code, "Quantity": cantidad})
 
+        # 3. Estructura final
         cabecera_final, lineas_final = [], []
         doc_num = 1
         fecha_hoy = datetime.now().strftime("%Y%m%d")
 
         for (tec, area), info in mapeo_datos.items():
             f_doc = info["DocDate"] if info["DocDate"] else fecha_hoy
-
             cabecera_final.append({
                 "DocNum": doc_num, "ObjType": "60", "DocDate": f_doc,
                 "U_DIVISION": info["U_DIVISION"], "U_AREA": info["U_AREA"],
@@ -117,12 +125,17 @@ def procesar_sap_colab_final():
                 })
             doc_num += 1
 
+        if not cabecera_final:
+            print("ℹ️ El proceso terminó pero no se generaron registros (revisa el formato del Excel).")
+            return
+
         f_cabecera = "Salida_Almacen_Cabecera.txt"
         f_lineas = "Salida_Almacen_Lineas.txt"
 
         pd.DataFrame(cabecera_final).to_csv(f_cabecera, index=False, sep='\t')
         pd.DataFrame(lineas_final).to_csv(f_lineas, index=False, sep='\t')
 
+        print("-" * 30)
         print(f"✅ Éxito: Se generaron {doc_num - 1} folios.")
         print("📥 Iniciando descarga automática...")
 
@@ -130,7 +143,4 @@ def procesar_sap_colab_final():
         files.download(f_lineas)
 
     except Exception as e:
-        import traceback
-        print(f"❌ Error durante el proceso: {e}")
-        # traceback.print_exc() # Descomenta esto si necesitas ver la línea exacta del error
-
+        print(f"❌ Error inesperado: {e}")
