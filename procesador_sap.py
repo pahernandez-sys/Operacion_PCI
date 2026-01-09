@@ -14,26 +14,33 @@ def extraer_fecha(texto):
     return None
 
 def procesar_sap_colab_final():
-
-    print("Por favor, selecciona el archivo Excel que deseas procesar:")
+    print("📂 Por favor, selecciona el archivo Excel que deseas procesar:")
     uploaded = files.upload()
 
     if not uploaded:
         print("❌ No se subió ningún archivo.")
         return
 
-
     archivo_entrada = list(uploaded.keys())[0]
-    # ----------------------------------------------
 
     try:
         print(f"🔄 Procesando {archivo_entrada}...")
-
         contenido_archivo = io.BytesIO(uploaded[archivo_entrada])
 
-        df_fo = pd.read_excel(contenido_archivo, sheet_name='Hoja1', header=None, usecols="A:G")
-        df_cu = pd.read_excel(contenido_archivo, sheet_name='Hoja2', header=None, usecols="A:G")
-        # ----------------------------------------------
+        # --- CAMBIO A LECTURA POR POSICIÓN ---
+        excel_file = pd.ExcelFile(contenido_archivo)
+        nombres_hojas = excel_file.sheet_names
+        
+        if len(nombres_hojas) < 2:
+            print(f"❌ El archivo debe tener al menos 2 pestañas. Encontradas: {len(nombres_hojas)}")
+            return
+
+        # Leemos la Hoja 1 (índice 0) y Hoja 2 (índice 1) sin importar cómo se llamen
+        print(f"📖 Leyendo Hoja 1: '{nombres_hojas[0]}' y Hoja 2: '{nombres_hojas[1]}'")
+        
+        df_fo = pd.read_excel(excel_file, sheet_name=0, header=None, usecols="A:G")
+        df_cu = pd.read_excel(excel_file, sheet_name=1, header=None, usecols="A:G")
+        # --------------------------------------
 
         raw_data = pd.concat([df_fo, df_cu], ignore_index=True).dropna(how='all')
 
@@ -41,7 +48,6 @@ def procesar_sap_colab_final():
         tecnico_actual = None
         area_actual = "GENERAL"
 
-        # 2. Lógica de agrupamiento
         for _, row in raw_data.iterrows():
             if pd.isna(row[1]) and pd.isna(row[3]) and pd.notna(row[0]):
                 area_actual = str(row[0]).replace("COBRE ", "").strip()
@@ -76,7 +82,6 @@ def procesar_sap_colab_final():
 
             mapeo_datos[clave]["Lines"].append({"ItemCode": item_code, "Quantity": cantidad})
 
-        # 3. Crear Estructura para Templates
         cabecera_final, lineas_final = [], []
         doc_num = 1
         fecha_hoy = datetime.now().strftime("%Y%m%d")
@@ -99,7 +104,6 @@ def procesar_sap_colab_final():
                 })
             doc_num += 1
 
-        # 4. Generar archivos y descargar
         f_cabecera = "Salida_Almacen_Cabecera.txt"
         f_lineas = "Salida_Almacen_Lineas.txt"
 
