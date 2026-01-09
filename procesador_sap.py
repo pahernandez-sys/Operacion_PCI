@@ -31,8 +31,8 @@ def procesar_sap_colab_final():
 
         contenido_archivo = io.BytesIO(uploaded[archivo_entrada])
 
-        df_fo = pd.read_excel(contenido_archivo, sheet_name='FO', header=None, usecols="A:G")
-        df_cu = pd.read_excel(contenido_archivo, sheet_name='CU', header=None, usecols="A:G")
+        df_fo = pd.read_excel(contenido_archivo, sheet_name='Hoja1', header=None, usecols="A:G")
+        df_cu = pd.read_excel(contenido_archivo, sheet_name='Hoja2', header=None, usecols="A:G")
         # ----------------------------------------------
 
         raw_data = pd.concat([df_fo, df_cu], ignore_index=True).dropna(how='all')
