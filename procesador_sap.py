@@ -27,7 +27,6 @@ def procesar_sap_colab_final():
         print(f"🔄 Procesando {archivo_entrada}...")
         contenido_archivo = io.BytesIO(uploaded[archivo_entrada])
 
-        # --- CAMBIO A LECTURA POR POSICIÓN ---
         excel_file = pd.ExcelFile(contenido_archivo)
         nombres_hojas = excel_file.sheet_names
         
@@ -35,11 +34,22 @@ def procesar_sap_colab_final():
             print(f"❌ El archivo debe tener al menos 2 pestañas. Encontradas: {len(nombres_hojas)}")
             return
 
-        # Leemos la Hoja 1 (índice 0) y Hoja 2 (índice 1) sin importar cómo se llamen
         print(f"📖 Leyendo Hoja 1: '{nombres_hojas[0]}' y Hoja 2: '{nombres_hojas[1]}'")
         
-        df_fo = pd.read_excel(excel_file, sheet_name=0, header=None, usecols="A:G")
-        df_cu = pd.read_excel(excel_file, sheet_name=1, header=None, usecols="A:G")
+        # --- SOLUCIÓN AL ERROR DE COLUMNAS ---
+        # Leemos sin 'usecols' primero para evitar el error de límites
+        df_fo_raw = pd.read_excel(excel_file, sheet_name=0, header=None)
+        df_cu_raw = pd.read_excel(excel_file, sheet_name=1, header=None)
+
+        # Forzamos que tengan al menos 7 columnas (A a la G) rellenando con vacío si faltan
+        def asegurar_columnas(df):
+            for i in range(7):
+                if i not in df.columns:
+                    df[i] = None
+            return df.iloc[:, 0:7] # Retornamos exactamente de A a G
+
+        df_fo = asegurar_columnas(df_fo_raw)
+        df_cu = asegurar_columnas(df_cu_raw)
         # --------------------------------------
 
         raw_data = pd.concat([df_fo, df_cu], ignore_index=True).dropna(how='all')
@@ -49,6 +59,9 @@ def procesar_sap_colab_final():
         area_actual = "GENERAL"
 
         for _, row in raw_data.iterrows():
+            # Validación de seguridad para filas vacías o incompletas
+            if len(row) < 4: continue 
+
             if pd.isna(row[1]) and pd.isna(row[3]) and pd.notna(row[0]):
                 area_actual = str(row[0]).replace("COBRE ", "").strip()
                 continue
@@ -117,5 +130,7 @@ def procesar_sap_colab_final():
         files.download(f_lineas)
 
     except Exception as e:
+        import traceback
         print(f"❌ Error durante el proceso: {e}")
+        # traceback.print_exc() # Descomenta esto si necesitas ver la línea exacta del error
 
