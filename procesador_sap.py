@@ -13,10 +13,9 @@ def extraer_fecha(texto):
     return None
 
 def procesar_sap_colab_final():
-    print("📂 Selecciona el archivo Excel (Xalapa o MAC):")
+    print("📂 Seleccionando archivo...")
     uploaded = files.upload()
     if not uploaded: return
-
     archivo_entrada = list(uploaded.keys())[0]
 
     try:
@@ -32,10 +31,6 @@ def procesar_sap_colab_final():
                 if col_idx not in df_temp.columns: df_temp[col_idx] = None
             dfs_a_concatenar.append(df_temp.iloc[:, 0:7])
 
-        if not dfs_a_concatenar:
-            print("❌ No hay datos válidos.")
-            return
-
         raw_data = pd.concat(dfs_a_concatenar, ignore_index=True)
         mapeo_datos = {}
         tecnico_actual = None
@@ -46,29 +41,30 @@ def procesar_sap_colab_final():
             col1 = str(row[1]).strip() if pd.notna(row[1]) else ""
             col3 = str(row[3]).strip() if pd.notna(row[3]) else ""
 
-            # 1. Ignorar encabezados literales
-            if "Contratista" in col0 or "Número de artículo" in col3: continue
+            # 1. SALTAR ENCABEZADOS Y FILAS VACÍAS
+            if any(x in col0 for x in ["Contratista", "ENTRADAS", "SALIDAS"]): continue
+            if not col0 and not col1 and not col3: continue
 
-            # 2. DETECCIÓN DE ÁREA (Lógica Dual)
-            # Si hay dato en col1 (caso Xalapa), esa es el área.
-            if col1 and col3 and col1.lower() != "area":
+            # 2. DETECCIÓN INTELIGENTE DE ÁREA
+            # Caso A (Xalapa): El área viene en la columna B de la fila de datos
+            if col1 and col3 and col1.lower() not in ["area", "division"]:
                 area_actual = col1
-            # Si col1 está vacía pero col0 tiene texto y col3 no (caso MAC/Títulos)
+            # Caso B (MAC): El área viene en una fila de título (col0 tiene texto, col3 está vacío)
             elif col0 and not col3:
-                area_limpia = re.sub(r'(COBRE|FIBRA|FO|CU|SALIDA)\s*', '', col0, flags=re.IGNORECASE).strip()
-                if area_limpia and not any(char.isdigit() for char in area_limpia): 
-                    area_actual = area_limpia
+                # Limpiar palabras como "COBRE", "FIBRA" o fechas del título
+                temp_area = re.sub(r'(COBRE|FIBRA|FO|CU|SALIDA|ENTRADA|\d{2}/\d{2}/\d{4})\s*', '', col0, flags=re.IGNORECASE).strip()
+                if temp_area: area_actual = temp_area
 
-            # 3. Validar si es una fila de material (debe tener código en Col D)
-            if not col3 or col3.lower() == "nan": continue
+            # 3. FILTRAR FILAS QUE NO SON DE MATERIAL
+            if not col3 or col3.lower() in ["nan", "número de artículo"]: continue
 
-            # Identificar Técnico
+            # 4. PROCESAR TÉCNICO Y DATOS
             tecnico_actual = col0 if col0 else tecnico_actual
             if not tecnico_actual: continue
 
             division = str(row[2]).strip() if pd.notna(row[2]) else "METRO"
             item_code = col3.split('.')[0].strip()
-
+            
             try:
                 cantidad = float(row[5]) if pd.notna(row[5]) else 0
             except:
@@ -77,9 +73,7 @@ def procesar_sap_colab_final():
             comentarios = str(row[6]).strip() if pd.notna(row[6]) else ""
             fecha_comentario = extraer_fecha(comentarios)
 
-            # Agrupar por Técnico y Área
             clave = (tecnico_actual, area_actual)
-
             if clave not in mapeo_datos:
                 mapeo_datos[clave] = {
                     "U_DIVISION": division,
@@ -89,10 +83,9 @@ def procesar_sap_colab_final():
                     "DocDate": fecha_comentario,
                     "Lines": []
                 }
-
             mapeo_datos[clave]["Lines"].append({"ItemCode": item_code, "Quantity": cantidad})
 
-        # Generación de salida
+        # 5. GENERAR TXT
         cabecera_final, lineas_final = [], []
         doc_num = 1
         fecha_hoy = datetime.now().strftime("%Y%m%d")
@@ -114,13 +107,13 @@ def procesar_sap_colab_final():
             doc_num += 1
 
         if not cabecera_final:
-            print("⚠️ No se generó información. Revisa el formato del Excel.")
+            print("⚠️ No se generaron registros. Revisa el formato del Excel.")
             return
 
         pd.DataFrame(cabecera_final).to_csv("Salida_Almacen_Cabecera.txt", index=False, sep='\t')
         pd.DataFrame(lineas_final).to_csv("Salida_Almacen_Lineas.txt", index=False, sep='\t')
 
-        print(f"✅ Proceso terminado. {doc_num - 1} documentos creados.")
+        print(f"✅ Éxito: Se generaron {doc_num - 1} folios.")
         files.download("Salida_Almacen_Cabecera.txt")
         files.download("Salida_Almacen_Lineas.txt")
 
