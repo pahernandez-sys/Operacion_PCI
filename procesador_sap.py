@@ -110,8 +110,8 @@ def procesar_sap_colab_final():
             print("⚠️ No se generaron registros. Revisa el formato del Excel.")
             return
 
-        pd.DataFrame(cabecera_final).to_csv("Salida_Almacen_Cabecera.txt", index=False, sep='\t', lineterminator='\r\n')
-        pd.DataFrame(lineas_final).to_csv("Salida_Almacen_Lineas.txt", index=False, sep='\t', lineterminator='\r\n')
+        pd.DataFrame(cabecera_final).to_csv("Salida_Almacen_Cabecera.txt", index=False, sep='\t', lineterminator='\r\n', encoding='cp1252')
+        pd.DataFrame(lineas_final).to_csv("Salida_Almacen_Lineas.txt", index=False, sep='\t', lineterminator='\r\n', encoding='cp1252')
 
         print(f"✅ Éxito: Se generaron {doc_num - 1} folios con formato Windows.")
         files.download("Salida_Almacen_Cabecera.txt")
