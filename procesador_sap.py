@@ -3,7 +3,7 @@ from datetime import datetime
 import re
 from google.colab import files
 import io
-import time
+import os
 
 def extraer_fecha(texto):
     if pd.isna(texto): return None
@@ -55,6 +55,7 @@ def procesar_sap_final():
 
             division = str(row[2]).strip() if pd.notna(row[2]) else "METRO"
             item_code = str(col3).split('.')[0].strip()
+            
             try:
                 cantidad = float(row[5]) if pd.notna(row[5]) else 0
             except:
@@ -69,7 +70,7 @@ def procesar_sap_final():
                 }
             mapeo_datos[clave]["Lines"].append({"ItemCode": item_code, "Quantity": cantidad})
 
-        # --- ESTRUCTURA SAP ---
+        # --- ESCRITURA ---
         doc_num = 1
         f_hoy = datetime.now().strftime("%Y%m%d")
         h_cab = ["DocNum", "ObjType", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "U_COPIA", "Comments"]
@@ -77,6 +78,7 @@ def procesar_sap_final():
 
         f1, f2 = "Salida_Almacen_Cabecera.txt", "Salida_Almacen_Lineas.txt"
         
+        # Guardar físicamente en el entorno antes de intentar descargar
         with open(f1, 'w', encoding='cp1252') as fc, open(f2, 'w', encoding='cp1252') as fl:
             fc.write('\t'.join(h_cab) + '\n' + '\t'.join(h_cab) + '\n')
             fl.write('\t'.join(h_lin) + '\n' + '\t'.join(h_lin) + '\n')
@@ -87,14 +89,14 @@ def procesar_sap_final():
                     fl.write(f"{doc_num}\t{i}\t{ln['ItemCode']}\t{ln['Quantity']}\tCAMARONE\t{info['U_CONTRATISTA']}\t{info['U_AREA']}\n")
                 doc_num += 1
 
-        print(f"✅ Generados {doc_num-1} documentos. Descargando...")
+        print(f"✅ Archivos generados correctamente. {doc_num-1} documentos.")
         
-        # Descarga secuencial con pausa para evitar bloqueo del navegador
-        files.download(f1)
-        time.sleep(2) # Pausa para que el navegador procese el primer archivo
-        files.download(f2)
+        # Método de descarga forzada para evitar el congelamiento
+        for f in [f1, f2]:
+            files.download(f)
+            print(f"⬇️ Descargando: {f}")
 
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ Error durante el proceso: {e}")
 
 procesar_sap_final()
