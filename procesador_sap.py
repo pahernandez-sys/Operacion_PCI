@@ -62,7 +62,6 @@ def procesar_sap_final():
                 }
             mapeo_datos[clave]["Lines"].append({"ItemCode": item_code, "Quantity": cantidad})
 
-        # --- GENERACIÓN DE DATAFRAMES ---
         cab_rows, lin_rows = [], []
         doc_num = 1
         f_hoy = datetime.now().strftime("%Y%m%d")
@@ -81,43 +80,39 @@ def procesar_sap_final():
                 })
             doc_num += 1
 
-        # Doble encabezado estilo Pandas
         df_cab = pd.DataFrame(cab_rows)
         df_lin = pd.DataFrame(lin_rows)
-        df_cab_final = pd.concat([pd.DataFrame([df_cab.columns.tolist()], columns=df_cab.columns), df_cab], ignore_index=True)
-        df_lin_final = pd.concat([pd.DataFrame([df_lin.columns.tolist()], columns=df_lin.columns), df_lin], ignore_index=True)
+        df_cab_f = pd.concat([pd.DataFrame([df_cab.columns.tolist()], columns=df_cab.columns), df_cab], ignore_index=True)
+        df_lin_f = pd.concat([pd.DataFrame([df_lin.columns.tolist()], columns=df_lin.columns), df_lin], ignore_index=True)
 
-        # Guardar archivos en el disco de Colab
-        df_cab_final.to_csv("Salida_Almacen_Cabecera.txt", index=False, sep='\t', lineterminator='\r\n', encoding='cp1252')
-        df_lin_final.to_csv("Salida_Almacen_Lineas.txt", index=False, sep='\t', lineterminator='\r\n', encoding='cp1252')
+        df_cab_f.to_csv("Salida_Almacen_Cabecera.txt", index=False, sep='\t', lineterminator='\r\n', encoding='cp1252')
+        df_lin_f.to_csv("Salida_Almacen_Lineas.txt", index=False, sep='\t', lineterminator='\r\n', encoding='cp1252')
 
         print(f"✅ Éxito: {doc_num - 1} folios listos.")
         
-        # --- SOLUCIÓN: BOTÓN DE DESCARGA ---
-        html_code = """
-        <div style="background-color: #e6fffa; border: 1px solid #38b2ac; padding: 15px; border-radius: 8px; margin-top: 10px;">
-            <p style="color: #2c7a7b; font-weight: bold; margin-bottom: 10px;">📦 Los archivos están listos para SAP:</p>
-            <button onclick="downloadFiles()" style="background-color: #38b2ac; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 16px;">
-                Descargar TXTs ahora
+        # BOTÓN PARA DESCARGAR SIN BLOQUEOS
+        html_button = """
+        <div style="margin-top: 20px; padding: 15px; background-color: #f0fdf4; border: 2px solid #22c55e; border-radius: 10px; text-align: center;">
+            <p style="color: #166534; font-weight: bold; font-family: sans-serif;">¡Proceso terminado!</p>
+            <button onclick="descargar()" style="background-color: #22c55e; color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold;">
+                📥 Descargar archivos para SAP
             </button>
         </div>
         <script>
-            function downloadFiles() {
-                const files = ['Salida_Almacen_Cabecera.txt', 'Salida_Almacen_Lineas.txt'];
-                files.forEach((file, index) => {
+            function descargar() {
+                const f = ['Salida_Almacen_Cabecera.txt', 'Salida_Almacen_Lineas.txt'];
+                f.forEach((name, i) => {
                     setTimeout(() => {
-                        const link = document.createElement('a');
-                        link.href = '/content/' + file;
-                        link.download = file;
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                    }, index * 1000);
+                        const a = document.createElement('a');
+                        a.href = '/content/' + name;
+                        a.download = name;
+                        a.click();
+                    }, i * 800);
                 });
             }
         </script>
         """
-        display(HTML(html_code))
+        display(HTML(html_button))
 
     except Exception as e:
         print(f"❌ Error: {e}")
