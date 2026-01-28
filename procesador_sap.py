@@ -41,24 +41,17 @@ def procesar_sap_colab_final():
             col1 = str(row[1]).strip() if pd.notna(row[1]) else ""
             col3 = str(row[3]).strip() if pd.notna(row[3]) else ""
 
-            # 1. SALTAR ENCABEZADOS Y FILAS VACÍAS
             if any(x in col0 for x in ["Contratista", "ENTRADAS", "SALIDAS"]): continue
             if not col0 and not col1 and not col3: continue
 
-            # 2. DETECCIÓN INTELIGENTE DE ÁREA
-            # Caso A (Xalapa): El área viene en la columna B de la fila de datos
             if col1 and col3 and col1.lower() not in ["area", "division"]:
                 area_actual = col1
-            # Caso B (MAC): El área viene en una fila de título (col0 tiene texto, col3 está vacío)
             elif col0 and not col3:
-                # Limpiar palabras como "COBRE", "FIBRA" o fechas del título
                 temp_area = re.sub(r'(COBRE|FIBRA|FO|CU|SALIDA|ENTRADA|\d{2}/\d{2}/\d{4})\s*', '', col0, flags=re.IGNORECASE).strip()
                 if temp_area: area_actual = temp_area
 
-            # 3. FILTRAR FILAS QUE NO SON DE MATERIAL
             if not col3 or col3.lower() in ["nan", "número de artículo"]: continue
 
-            # 4. PROCESAR TÉCNICO Y DATOS
             tecnico_actual = col0 if col0 else tecnico_actual
             if not tecnico_actual: continue
 
@@ -85,7 +78,7 @@ def procesar_sap_colab_final():
                 }
             mapeo_datos[clave]["Lines"].append({"ItemCode": item_code, "Quantity": cantidad})
 
-        # 5. GENERAR TXT
+        # --- GENERACIÓN DE DATOS ---
         cabecera_final, lineas_final = [], []
         doc_num = 1
         fecha_hoy = datetime.now().strftime("%Y%m%d")
@@ -107,13 +100,30 @@ def procesar_sap_colab_final():
             doc_num += 1
 
         if not cabecera_final:
-            print("⚠️ No se generaron registros. Revisa el formato del Excel.")
+            print("⚠️ No se generaron registros.")
             return
 
-        pd.DataFrame(cabecera_final).to_csv("Salida_Almacen_Cabecera.txt", index=False, sep='\t', lineterminator='\r\n', encoding='cp1252')
-        pd.DataFrame(lineas_final).to_csv("Salida_Almacen_Lineas.txt", index=False, sep='\t', lineterminator='\r\n', encoding='cp1252')
+        # --- IMPLEMENTACIÓN DE DOBLE ENCABEZADO ---
+        
+        # 1. Cabecera
+        df_cab = pd.DataFrame(cabecera_final)
+        # Definimos los nombres descriptivos para la fila 1
+        header_desc_cab = ["DocNum", "Period", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "U_COPIA", "Comments"]
+        # Creamos un nuevo DF con el encabezado técnico y luego el descriptivo
+        output_cab = pd.DataFrame([df_cab.columns.tolist(), header_desc_cab])
+        output_cab = pd.concat([output_cab, df_cab], ignore_index=True)
 
-        print(f"✅ Éxito: Se generaron {doc_num - 1} folios con formato Windows.")
+        # 2. Líneas
+        df_lin = pd.DataFrame(lineas_final)
+        header_desc_lin = ["ParentKey", "LineNum", "ItemCode", "Quantity", "WhsCode", "U_CONTRATISTA", "U_AREA"]
+        output_lin = pd.DataFrame([df_lin.columns.tolist(), header_desc_lin])
+        output_lin = pd.concat([output_lin, df_lin], ignore_index=True)
+
+        # Guardar archivos (header=False porque ya los incluimos en el DF)
+        output_cab.to_csv("Salida_Almacen_Cabecera.txt", index=False, header=False, sep='\t', lineterminator='\r\n', encoding='cp1252')
+        output_lin.to_csv("Salida_Almacen_Lineas.txt", index=False, header=False, sep='\t', lineterminator='\r\n', encoding='cp1252')
+
+        print(f"✅ Éxito: Se generaron {doc_num - 1} folios con DOBLE ENCABEZADO.")
         files.download("Salida_Almacen_Cabecera.txt")
         files.download("Salida_Almacen_Lineas.txt")
 
