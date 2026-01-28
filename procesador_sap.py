@@ -75,7 +75,7 @@ def procesar_sap_colab_final():
                 }
             mapeo_datos[clave]["Lines"].append({"ItemCode": item_code, "Quantity": cantidad})
 
-        # --- GENERACIÓN DE DATOS ESTRUCTURADOS ---
+        # --- GENERACIÓN DE DATOS ---
         cab_rows = []
         lin_rows = []
         doc_num = 1
@@ -83,56 +83,38 @@ def procesar_sap_colab_final():
 
         for (tec, area), info in mapeo_datos.items():
             f_doc = info["DocDate"] if info["DocDate"] else fecha_hoy
-            
-            # 1. Cabecera (9 columnas - EXACTAS)
+            # Cabecera (9 columnas)
             cab_rows.append([
-                str(doc_num),          # DocNum
-                "60",                  # ObjType
-                f_doc,                 # DocDate
-                info["U_DIVISION"],    # U_DIVISION
-                info["U_AREA"],        # U_AREA
-                "MANTENIMIENTO",       # U_TipoP
-                info["U_CONTRATISTA"], # U_CONTRATISTA
-                "ORIGINAL",            # U_COPIA
-                info["Comments"]       # Comments
+                str(doc_num), "60", f_doc, info["U_DIVISION"], info["U_AREA"],
+                "MANTENIMIENTO", info["U_CONTRATISTA"], "ORIGINAL", info["Comments"]
             ])
-            
-            # 2. Líneas (7 columnas - EXACTAS)
+            # Líneas (7 columnas)
             for idx, ln in enumerate(info["Lines"]):
                 lin_rows.append([
-                    str(doc_num),          # ParentKey
-                    str(idx),              # LineNum
-                    str(ln["ItemCode"]),   # ItemCode
-                    str(ln["Quantity"]),   # Quantity
-                    "CAMARONE",            # WhsCode
-                    info["U_CONTRATISTA"], # U_CONTRATISTA (Faltaba)
-                    info["U_AREA"]         # U_AREA (Faltaba)
+                    str(doc_num), str(idx), str(ln["ItemCode"]), str(ln["Quantity"]),
+                    "CAMARONE", info["U_CONTRATISTA"], info["U_AREA"]
                 ])
             doc_num += 1
 
-        if not cab_rows:
-            print("⚠️ No se generaron registros.")
-            return
-
-        # --- FUNCIÓN DE ESCRITURA MANUAL (TABULADORES GARANTIZADOS) ---
         def escribir_txt_sap(nombre_archivo, encabezado, filas):
             with open(nombre_archivo, 'w', encoding='cp1252', newline='') as f:
-                # Fila 1: Técnica
-                f.write('\t'.join(encabezado) + '\r\n')
-                # Fila 2: Descriptiva (SAP usa el mismo nombre arriba y abajo)
-                f.write('\t'.join(encabezado) + '\r\n')
-                # Datos
+                f.write('\t'.join(encabezado) + '\r\n') # Fila 1
+                f.write('\t'.join(encabezado) + '\r\n') # Fila 2
                 for fila in filas:
                     f.write('\t'.join(fila) + '\r\n')
 
-        # Definición de encabezados finales
         h_cab = ["DocNum", "ObjType", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "U_COPIA", "Comments"]
         h_lin = ["ParentKey", "LineNum", "ItemCode", "Quantity", "WhsCode", "U_CONTRATISTA", "U_AREA"]
 
-        # Guardar archivos
         escribir_txt_sap("Salida_Almacen_Cabecera.txt", h_cab, cab_rows)
         escribir_txt_sap("Salida_Almacen_Lineas.txt", h_lin, lin_rows)
 
-        print(f"✅ Éxito: {doc_num - 1} folios generados con todas las columnas.")
+        print(f"✅ Éxito: {doc_num - 1} documentos listos.")
         files.download("Salida_Almacen_Cabecera.txt")
         files.download("Salida_Almacen_Lineas.txt")
+
+    except Exception as e:
+        print(f"❌ Error: {e}")
+
+# Ejecutar la función
+procesar_sap_colab_final()
