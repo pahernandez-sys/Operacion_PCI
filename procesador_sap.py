@@ -19,7 +19,6 @@ def procesar_sap_final():
     archivo_entrada = list(uploaded.keys())[0]
 
     try:
-        # --- PROCESAMIENTO DE DATOS ---
         contenido_archivo = io.BytesIO(uploaded[archivo_entrada])
         excel_file = pd.ExcelFile(contenido_archivo)
         
@@ -63,32 +62,35 @@ def procesar_sap_final():
                 }
             mapeo_datos[clave]["Lines"].append({"ItemCode": item_code, "Quantity": cantidad})
 
-        # --- PREPARACIÓN DE TEXTO (Doble Encabezado) ---
+        # --- ESTRUCTURA SAP ---
         f_hoy = datetime.now().strftime("%Y%m%d")
         h_cab = ["DocNum", "ObjType", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "U_COPIA", "Comments"]
         h_lin = ["ParentKey", "LineNum", "ItemCode", "Quantity", "WhsCode", "U_CONTRATISTA", "U_AREA"]
 
-        cab_txt = '\t'.join(h_cab) + '\n' + '\t'.join(h_cab) + '\n'
-        lin_txt = '\t'.join(h_lin) + '\n' + '\t'.join(h_lin) + '\n'
+        # 1. Generar contenido Cabecera
+        cab_content = '\t'.join(h_cab) + '\n' + '\t'.join(h_cab) + '\n'
+        # 2. Generar contenido Líneas
+        lin_content = '\t'.join(h_lin) + '\n' + '\t'.join(h_lin) + '\n'
         
         doc_num = 1
         for (tec, area), info in mapeo_datos.items():
             f_doc = info["DocDate"] if info["DocDate"] else f_hoy
-            cab_txt += f"{doc_num}\t60\t{f_doc}\t{info['U_DIVISION']}\t{info['U_AREA']}\tMANTENIMIENTO\t{info['U_CONTRATISTA']}\tORIGINAL\t{info['Comments']}\n"
+            cab_content += f"{doc_num}\t60\t{f_doc}\t{info['U_DIVISION']}\t{info['U_AREA']}\tMANTENIMIENTO\t{info['U_CONTRATISTA']}\tORIGINAL\t{info['Comments']}\n"
             for i, ln in enumerate(info["Lines"]):
-                lin_txt += f"{doc_num}\t{i}\t{ln['ItemCode']}\t{ln['Quantity']}\tCAMARONE\t{info['U_CONTRATISTA']}\t{info['U_AREA']}\n"
+                lin_content += f"{doc_num}\t{i}\t{ln['ItemCode']}\t{ln['Quantity']}\tCAMARONE\t{info['U_CONTRATISTA']}\t{info['U_AREA']}\n"
             doc_num += 1
 
-        # --- DESCARGA MANUAL ---
-        # Guardamos archivos en el sistema de Colab
-        with open("Salida_Almacen_Cabecera.txt", "w", encoding="cp1252") as f: f.write(cab_txt)
-        with open("Salida_Almacen_Lineas.txt", "w", encoding="cp1252") as f: f.write(lin_txt)
+        # ESCRIBIR ARCHIVOS AL DISCO DE COLAB
+        with open("Salida_Almacen_Cabecera.txt", "w", encoding="cp1252") as f: f.write(cab_content)
+        with open("Salida_Almacen_Lineas.txt", "w", encoding="cp1252") as f: f.write(lin_content)
 
-        print(f"✅ {doc_num-1} documentos listos.")
+        print(f"✅ {doc_num-1} folios procesados.")
         
-        # Ejecutamos la descarga
-        files.download("Salida_Almacen_Cabecera.txt")
-        files.download("Salida_Almacen_Lineas.txt")
+        # DESCARGA
+        from google.colab import files as colab_files
+        colab_files.download("Salida_Almacen_Cabecera.txt")
+        colab_files.download("Salida_Almacen_Lineas.txt")
+        print("🚀 Descarga enviada al navegador.")
 
     except Exception as e:
         print(f"❌ Error: {e}")
