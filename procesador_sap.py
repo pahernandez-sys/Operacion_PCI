@@ -4,6 +4,7 @@ import re
 from google.colab import files
 import io
 import time
+import zipfile
 
 def extraer_fecha(texto):
     if pd.isna(texto): return None
@@ -80,8 +81,11 @@ def procesar_sap_colab_final():
         h_cab = ["DocNum", "ObjType", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "U_COPIA", "Comments"]
         h_lin = ["ParentKey", "LineNum", "ItemCode", "Quantity", "WhsCode", "U_CONTRATISTA", "U_AREA"]
 
-        with open("Salida_Almacen_Cabecera.txt", 'w', encoding='cp1252', newline='') as fc, \
-             open("Salida_Almacen_Lineas.txt", 'w', encoding='cp1252', newline='') as fl:
+        archivo_cab = "Salida_Almacen_Cabecera.txt"
+        archivo_lin = "Salida_Almacen_Lineas.txt"
+
+        with open(archivo_cab, 'w', encoding='cp1252', newline='') as fc, \
+             open(archivo_lin, 'w', encoding='cp1252', newline='') as fl:
             
             fc.write('\t'.join(h_cab) + '\r\n')
             fc.write('\t'.join(h_cab) + '\r\n')
@@ -95,11 +99,15 @@ def procesar_sap_colab_final():
                     fl.write('\t'.join([str(doc_num), str(idx), str(ln["ItemCode"]), str(ln["Quantity"]), "CAMARONE", info["U_CONTRATISTA"], info["U_AREA"]]) + '\r\n')
                 doc_num += 1
 
-        print(f"✅ Archivos generados: {doc_num - 1} folios. Iniciando descarga...")
-        time.sleep(1) # Pausa de seguridad para el navegador
-        files.download("Salida_Almacen_Cabecera.txt")
-        time.sleep(1)
-        files.download("Salida_Almacen_Lineas.txt")
+        # --- EMPAQUETADO EN ZIP ---
+        zip_nombre = f"Resultado_SAP_{f_hoy}.zip"
+        with zipfile.ZipFile(zip_nombre, 'w') as zipf:
+            zipf.write(archivo_cab)
+            zipf.write(archivo_lin)
+
+        print(f"✅ Éxito: {doc_num - 1} documentos listos.")
+        print("📦 Descargando paquete ZIP...")
+        files.download(zip_nombre)
 
     except Exception as e:
         print(f"❌ Error: {e}")
