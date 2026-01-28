@@ -4,7 +4,6 @@ import re
 from google.colab import files
 import io
 import time
-import zipfile
 
 def extraer_fecha(texto):
     if pd.isna(texto): return None
@@ -14,7 +13,7 @@ def extraer_fecha(texto):
         return f"{anio}{mes}{dia}"
     return None
 
-def procesar_sap_colab_final():
+def procesar_sap_final():
     print("📂 Seleccionando archivo...")
     uploaded = files.upload()
     if not uploaded: return
@@ -34,8 +33,7 @@ def procesar_sap_colab_final():
 
         raw_data = pd.concat(dfs_a_concatenar, ignore_index=True)
         mapeo_datos = {}
-        tecnico_actual = None
-        area_actual = "GENERAL"
+        tecnico_actual, area_actual = None, "GENERAL"
 
         for _, row in raw_data.iterrows():
             col0 = str(row[0]).strip() if pd.notna(row[0]) else ""
@@ -57,60 +55,46 @@ def procesar_sap_colab_final():
 
             division = str(row[2]).strip() if pd.notna(row[2]) else "METRO"
             item_code = str(col3).split('.')[0].strip()
-            
             try:
                 cantidad = float(row[5]) if pd.notna(row[5]) else 0
             except:
                 cantidad = 0
 
-            comentarios = str(row[6]).strip() if pd.notna(row[6]) else ""
-            fecha_comentario = extraer_fecha(comentarios)
-
             clave = (tecnico_actual, area_actual)
             if clave not in mapeo_datos:
                 mapeo_datos[clave] = {
                     "U_DIVISION": division, "U_AREA": area_actual,
-                    "U_CONTRATISTA": tecnico_actual, "Comments": comentarios,
-                    "DocDate": fecha_comentario, "Lines": []
+                    "U_CONTRATISTA": tecnico_actual, "Comments": str(row[6]).strip() if pd.notna(row[6]) else "",
+                    "DocDate": extraer_fecha(row[6]), "Lines": []
                 }
             mapeo_datos[clave]["Lines"].append({"ItemCode": item_code, "Quantity": cantidad})
 
-        # --- ESCRITURA ---
+        # --- ESTRUCTURA SAP ---
         doc_num = 1
         f_hoy = datetime.now().strftime("%Y%m%d")
         h_cab = ["DocNum", "ObjType", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "U_COPIA", "Comments"]
         h_lin = ["ParentKey", "LineNum", "ItemCode", "Quantity", "WhsCode", "U_CONTRATISTA", "U_AREA"]
 
-        archivo_cab = "Salida_Almacen_Cabecera.txt"
-        archivo_lin = "Salida_Almacen_Lineas.txt"
-
-        with open(archivo_cab, 'w', encoding='cp1252', newline='') as fc, \
-             open(archivo_lin, 'w', encoding='cp1252', newline='') as fl:
-            
-            fc.write('\t'.join(h_cab) + '\r\n')
-            fc.write('\t'.join(h_cab) + '\r\n')
-            fl.write('\t'.join(h_lin) + '\r\n')
-            fl.write('\t'.join(h_lin) + '\r\n')
-
+        f1, f2 = "Salida_Almacen_Cabecera.txt", "Salida_Almacen_Lineas.txt"
+        
+        with open(f1, 'w', encoding='cp1252') as fc, open(f2, 'w', encoding='cp1252') as fl:
+            fc.write('\t'.join(h_cab) + '\n' + '\t'.join(h_cab) + '\n')
+            fl.write('\t'.join(h_lin) + '\n' + '\t'.join(h_lin) + '\n')
             for (tec, area), info in mapeo_datos.items():
                 f_doc = info["DocDate"] if info["DocDate"] else f_hoy
-                fc.write('\t'.join([str(doc_num), "60", f_doc, info["U_DIVISION"], info["U_AREA"], "MANTENIMIENTO", info["U_CONTRATISTA"], "ORIGINAL", info["Comments"]]) + '\r\n')
-                for idx, ln in enumerate(info["Lines"]):
-                    fl.write('\t'.join([str(doc_num), str(idx), str(ln["ItemCode"]), str(ln["Quantity"]), "CAMARONE", info["U_CONTRATISTA"], info["U_AREA"]]) + '\r\n')
+                fc.write(f"{doc_num}\t60\t{f_doc}\t{info['U_DIVISION']}\t{info['U_AREA']}\tMANTENIMIENTO\t{info['U_CONTRATISTA']}\tORIGINAL\t{info['Comments']}\n")
+                for i, ln in enumerate(info["Lines"]):
+                    fl.write(f"{doc_num}\t{i}\t{ln['ItemCode']}\t{ln['Quantity']}\tCAMARONE\t{info['U_CONTRATISTA']}\t{info['U_AREA']}\n")
                 doc_num += 1
 
-        # --- EMPAQUETADO EN ZIP ---
-        zip_nombre = f"Resultado_SAP_{f_hoy}.zip"
-        with zipfile.ZipFile(zip_nombre, 'w') as zipf:
-            zipf.write(archivo_cab)
-            zipf.write(archivo_lin)
-
-        print(f"✅ Éxito: {doc_num - 1} documentos listos.")
-        print("📦 Descargando paquete ZIP...")
-        files.download(zip_nombre)
+        print(f"✅ Generados {doc_num-1} documentos. Descargando...")
+        
+        # Descarga secuencial con pausa para evitar bloqueo del navegador
+        files.download(f1)
+        time.sleep(2) # Pausa para que el navegador procese el primer archivo
+        files.download(f2)
 
     except Exception as e:
         print(f"❌ Error: {e}")
 
-# Ejecutar
-procesar_sap_colab_final()
+procesar_sap_final()
