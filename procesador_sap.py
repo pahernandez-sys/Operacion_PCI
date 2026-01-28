@@ -3,6 +3,7 @@ from datetime import datetime
 import re
 from google.colab import files
 import io
+import time
 
 def extraer_fecha(texto):
     if pd.isna(texto): return None
@@ -54,7 +55,7 @@ def procesar_sap_colab_final():
             if not tecnico_actual: continue
 
             division = str(row[2]).strip() if pd.notna(row[2]) else "METRO"
-            item_code = col3.split('.')[0].strip()
+            item_code = str(col3).split('.')[0].strip()
             
             try:
                 cantidad = float(row[5]) if pd.notna(row[5]) else 0
@@ -73,7 +74,7 @@ def procesar_sap_colab_final():
                 }
             mapeo_datos[clave]["Lines"].append({"ItemCode": item_code, "Quantity": cantidad})
 
-        # --- ESCRITURA DIRECTA ---
+        # --- ESCRITURA ---
         doc_num = 1
         f_hoy = datetime.now().strftime("%Y%m%d")
         h_cab = ["DocNum", "ObjType", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "U_COPIA", "Comments"]
@@ -89,19 +90,19 @@ def procesar_sap_colab_final():
 
             for (tec, area), info in mapeo_datos.items():
                 f_doc = info["DocDate"] if info["DocDate"] else f_hoy
-                # Cabecera (9 campos)
                 fc.write('\t'.join([str(doc_num), "60", f_doc, info["U_DIVISION"], info["U_AREA"], "MANTENIMIENTO", info["U_CONTRATISTA"], "ORIGINAL", info["Comments"]]) + '\r\n')
-                # Líneas (7 campos)
                 for idx, ln in enumerate(info["Lines"]):
                     fl.write('\t'.join([str(doc_num), str(idx), str(ln["ItemCode"]), str(ln["Quantity"]), "CAMARONE", info["U_CONTRATISTA"], info["U_AREA"]]) + '\r\n')
                 doc_num += 1
 
-        print(f"✅ Proceso terminado: {doc_num - 1} documentos.")
+        print(f"✅ Archivos generados: {doc_num - 1} folios. Iniciando descarga...")
+        time.sleep(1) # Pausa de seguridad para el navegador
         files.download("Salida_Almacen_Cabecera.txt")
+        time.sleep(1)
         files.download("Salida_Almacen_Lineas.txt")
 
     except Exception as e:
-        print(f"❌ Error crítico: {e}")
+        print(f"❌ Error: {e}")
 
-# Ejecución
+# Ejecutar
 procesar_sap_colab_final()
