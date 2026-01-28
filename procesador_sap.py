@@ -16,12 +16,15 @@ def extraer_fecha(texto):
 
 def crear_enlace_descarga(nombre_archivo, contenido):
     b64 = base64.b64encode(contenido.encode('cp1252')).decode()
-    return f'<a href="data:text/plain;base64,{b64}" download="{nombre_archivo}" style="display:inline-block; background-color:#4CAF50; color:white; padding:10px 20px; text-decoration:none; border-radius:5px; margin:5px;">Descargar {nombre_archivo}</a>'
+    return f'<a href="data:text/plain;base64,{b64}" download="{nombre_archivo}" style="display:inline-block; background-color:#4CAF50; color:white; padding:10px 20px; text-decoration:none; border-radius:5px; margin:5px; font-family:sans-serif;">Descargar {nombre_archivo}</a>'
 
 def procesar_sap_final():
     print("📂 Seleccionando archivo...")
     uploaded = files.upload()
-    if not uploaded: return
+    if not uploaded: 
+        print("❌ No se seleccionó ningún archivo.")
+        return
+    
     archivo_entrada = list(uploaded.keys())[0]
 
     try:
@@ -68,7 +71,7 @@ def procesar_sap_final():
                 }
             mapeo_datos[clave]["Lines"].append({"ItemCode": item_code, "Quantity": cantidad})
 
-        # --- GENERACIÓN DE CONTENIDO ---
+        # --- ESTRUCTURA SAP ---
         f_hoy = datetime.now().strftime("%Y%m%d")
         h_cab = ["DocNum", "ObjType", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "U_COPIA", "Comments"]
         h_lin = ["ParentKey", "LineNum", "ItemCode", "Quantity", "WhsCode", "U_CONTRATISTA", "U_AREA"]
@@ -84,13 +87,24 @@ def procesar_sap_final():
                 lin_txt += f"{doc_num}\t{i}\t{ln['ItemCode']}\t{ln['Quantity']}\tCAMARONE\t{info['U_CONTRATISTA']}\t{info['U_AREA']}\r\n"
             doc_num += 1
 
-        # --- MOSTRAR BOTONES DE DESCARGA ---
-        print(f"✅ Éxito: {doc_num - 1} folios generados.")
-        html_output = crear_enlace_descarga("Salida_Almacen_Cabecera.txt", cab_txt)
-        html_output += crear_enlace_descarga("Salida_Almacen_Lineas.txt", lin_txt)
-        display(HTML(f'<div style="margin-top:20px;">{html_output}</div>'))
+        # --- MOSTRAR RESULTADOS Y CERRAR ---
+        print(f"✅ Proceso terminado: {doc_num - 1} folios.")
+        html_btns = crear_enlace_descarga("Salida_Almacen_Cabecera.txt", cab_txt)
+        html_btns += crear_enlace_descarga("Salida_Almacen_Lineas.txt", lin_txt)
+        
+        display(HTML(f'''
+            <div style="border:2px solid #4CAF50; padding:15px; border-radius:10px; background-color:#f9fff9; margin-top:10px;">
+                <strong style="color:#2e7d32;">¡Archivos Listos!</strong><br>
+                Haz clic en los botones para descargar. La celda se detendrá automáticamente.
+                <div style="margin-top:10px;">{html_btns}</div>
+            </div>
+        '''))
 
     except Exception as e:
         print(f"❌ Error: {e}")
+    
+    # Esto fuerza el fin de la ejecución de la celda
+    return
 
+# Ejecutar proceso
 procesar_sap_final()
