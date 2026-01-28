@@ -19,7 +19,7 @@ def procesar_sap_colab_final():
     archivo_entrada = list(uploaded.keys())[0]
 
     try:
-        # --- 1. CARGA Y CONCATENACIÓN ---
+        # 1. Procesamiento de Excel
         contenido_archivo = io.BytesIO(uploaded[archivo_entrada])
         excel_file = pd.ExcelFile(contenido_archivo)
         nombres_hojas = excel_file.sheet_names
@@ -37,7 +37,6 @@ def procesar_sap_colab_final():
         tecnico_actual = None
         area_actual = "GENERAL"
 
-        # --- 2. EXTRACCIÓN DE LOGICA ---
         for _, row in raw_data.iterrows():
             col0 = str(row[0]).strip() if pd.notna(row[0]) else ""
             col1 = str(row[1]).strip() if pd.notna(row[1]) else ""
@@ -53,7 +52,6 @@ def procesar_sap_colab_final():
                 if temp_area: area_actual = temp_area
 
             if not col3 or col3.lower() in ["nan", "número de artículo"]: continue
-
             tecnico_actual = col0 if col0 else tecnico_actual
             if not tecnico_actual: continue
 
@@ -77,47 +75,43 @@ def procesar_sap_colab_final():
                 }
             mapeo_datos[clave]["Lines"].append({"ItemCode": item_code, "Quantity": cantidad})
 
-        # --- 3. GENERACIÓN DE FILAS ---
-        cab_rows = []
-        lin_rows = []
+        # 2. Preparación de Filas y Encabezados
         doc_num = 1
         fecha_hoy = datetime.now().strftime("%Y%m%d")
-
-        for (tec, area), info in mapeo_datos.items():
-            f_doc = info["DocDate"] if info["DocDate"] else fecha_hoy
-            # Cabecera (9 campos)
-            cab_rows.append([
-                str(doc_num), "60", f_doc, info["U_DIVISION"], info["U_AREA"],
-                "MANTENIMIENTO", info["U_CONTRATISTA"], "ORIGINAL", info["Comments"]
-            ])
-            # Líneas (7 campos)
-            for idx, ln in enumerate(info["Lines"]):
-                lin_rows.append([
-                    str(doc_num), str(idx), str(ln["ItemCode"]), str(ln["Quantity"]),
-                    "CAMARONE", info["U_CONTRATISTA"], info["U_AREA"]
-                ])
-            doc_num += 1
-
-        # --- 4. FUNCIÓN DE ESCRITURA Y DESCARGA ---
-        def guardar_txt(nombre, encabezado, filas):
-            with open(nombre, 'w', encoding='cp1252', newline='') as f:
-                f.write('\t'.join(encabezado) + '\r\n') # Fila 1
-                f.write('\t'.join(encabezado) + '\r\n') # Fila 2
-                for fila in filas:
-                    f.write('\t'.join(fila) + '\r\n')
-
+        
         h_cab = ["DocNum", "ObjType", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "U_COPIA", "Comments"]
         h_lin = ["ParentKey", "LineNum", "ItemCode", "Quantity", "WhsCode", "U_CONTRATISTA", "U_AREA"]
 
-        guardar_txt("Salida_Almacen_Cabecera.txt", h_cab, cab_rows)
-        guardar_txt("Salida_Almacen_Lineas.txt", h_lin, lin_rows)
+        # 3. Escritura Directa de Cabecera
+        with open("Salida_Almacen_Cabecera.txt", 'w', encoding='cp1252', newline='') as f_cab:
+            f_cab.write('\t'.join(h_cab) + '\r\n') # Fila 1
+            f_cab.write('\t'.join(h_cab) + '\r\n') # Fila 2
+            
+            # 4. Escritura Directa de Líneas
+            with open("Salida_Almacen_Lineas.txt", 'w', encoding='cp1252', newline='') as f_lin:
+                f_lin.write('\t'.join(h_lin) + '\r\n') # Fila 1
+                f_lin.write('\t'.join(h_lin) + '\r\n') # Fila 2
+                
+                for (tec, area), info in mapeo_datos.items():
+                    f_doc = info["DocDate"] if info["DocDate"] else fecha_hoy
+                    
+                    # Escribir Cabecera
+                    row_cab = [str(doc_num), "60", f_doc, info["U_DIVISION"], info["U_AREA"], "MANTENIMIENTO", info["U_CONTRATISTA"], "ORIGINAL", info["Comments"]]
+                    f_cab.write('\t'.join(row_cab) + '\r\n')
+                    
+                    # Escribir Líneas
+                    for idx, ln in enumerate(info["Lines"]):
+                        row_lin = [str(doc_num), str(idx), str(ln["ItemCode"]), str(ln["Quantity"]), "CAMARONE", info["U_CONTRATISTA"], info["U_AREA"]]
+                        f_lin.write('\t'.join(row_lin) + '\r\n')
+                    
+                    doc_num += 1
 
         print(f"✅ Éxito: {doc_num - 1} documentos generados.")
         files.download("Salida_Almacen_Cabecera.txt")
         files.download("Salida_Almacen_Lineas.txt")
 
     except Exception as e:
-        print(f"❌ Error crítico en el proceso: {e}")
+        print(f"❌ Error crítico: {e}")
 
-# Ejecución final
+# Ejecución
 procesar_sap_colab_final()
