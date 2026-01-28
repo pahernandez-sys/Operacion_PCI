@@ -69,61 +69,55 @@ def procesar_sap_colab_final():
             clave = (tecnico_actual, area_actual)
             if clave not in mapeo_datos:
                 mapeo_datos[clave] = {
-                    "U_DIVISION": division,
-                    "U_AREA": area_actual,
-                    "U_CONTRATISTA": tecnico_actual,
-                    "Comments": comentarios,
-                    "DocDate": fecha_comentario,
-                    "Lines": []
+                    "U_DIVISION": division, "U_AREA": area_actual,
+                    "U_CONTRATISTA": tecnico_actual, "Comments": comentarios,
+                    "DocDate": fecha_comentario, "Lines": []
                 }
             mapeo_datos[clave]["Lines"].append({"ItemCode": item_code, "Quantity": cantidad})
 
-        # --- GENERACIÓN DE DATOS ---
-        cabecera_final, lineas_final = [], []
+        # --- GENERACIÓN DE DATOS ESTRUCTURADOS ---
+        cab_rows = []
+        lin_rows = []
         doc_num = 1
         fecha_hoy = datetime.now().strftime("%Y%m%d")
 
         for (tec, area), info in mapeo_datos.items():
             f_doc = info["DocDate"] if info["DocDate"] else fecha_hoy
-            cabecera_final.append({
-                "DocNum": doc_num, "ObjType": "60", "DocDate": f_doc,
-                "U_DIVISION": info["U_DIVISION"], "U_AREA": info["U_AREA"],
-                "U_TipoP": "MANTENIMIENTO", "U_CONTRATISTA": info["U_CONTRATISTA"],
-                "U_COPIA": "ORIGINAL", "Comments": info["Comments"]
+            # Datos de Cabecera
+            cab_rows.append({
+                "DocNum": doc_num, "DocDate": f_doc, "U_DIVISION": info["U_DIVISION"],
+                "U_AREA": info["U_AREA"], "U_TipoP": "MANTENIMIENTO",
+                "U_CONTRATISTA": info["U_CONTRATISTA"], "Comments": info["Comments"]
             })
+            # Datos de Líneas
             for idx, ln in enumerate(info["Lines"]):
-                lineas_final.append({
+                lin_rows.append({
                     "ParentKey": doc_num, "LineNum": idx, "ItemCode": ln["ItemCode"],
-                    "Quantity": ln["Quantity"], "WhsCode": "CAMARONE",
-                    "U_CONTRATISTA": info["U_CONTRATISTA"], "U_AREA": info["U_AREA"]
+                    "Quantity": ln["Quantity"], "WhsCode": "CAMARONE"
                 })
             doc_num += 1
 
-        if not cabecera_final:
+        if not cab_rows:
             print("⚠️ No se generaron registros.")
             return
 
-        # --- IMPLEMENTACIÓN DE DOBLE ENCABEZADO ---
-        
-        # 1. Cabecera
-        df_cab = pd.DataFrame(cabecera_final)
-        # Definimos los nombres descriptivos para la fila 1
-        header_desc_cab = ["DocNum", "Period", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "U_COPIA", "Comments"]
-        # Creamos un nuevo DF con el encabezado técnico y luego el descriptivo
-        output_cab = pd.DataFrame([df_cab.columns.tolist(), header_desc_cab])
-        output_cab = pd.concat([output_cab, df_cab], ignore_index=True)
+        # --- FUNCIÓN PARA CREAR DOBLE ENCABEZADO SAP ---
+        def guardar_sap_txt(lista_datos, nombre_archivo, descripciones):
+            df = pd.DataFrame(lista_datos)
+            # Fila 1: Nombres técnicos (los del DataFrame)
+            # Fila 2: Nombres descriptivos (los pasados por argumento)
+            df_final = pd.DataFrame([df.columns.tolist(), descripciones])
+            df_final = pd.concat([df_final, df], ignore_index=True)
+            df_final.to_csv(nombre_archivo, index=False, header=False, sep='\t', lineterminator='\r\n', encoding='cp1252')
 
-        # 2. Líneas
-        df_lin = pd.DataFrame(lineas_final)
-        header_desc_lin = ["ParentKey", "LineNum", "ItemCode", "Quantity", "WhsCode", "U_CONTRATISTA", "U_AREA"]
-        output_lin = pd.DataFrame([df_lin.columns.tolist(), header_desc_lin])
-        output_lin = pd.concat([output_lin, df_lin], ignore_index=True)
+        # Descripciones requeridas por DTW
+        desc_cab = ["DocNum", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "Comments"]
+        desc_lin = ["ParentKey", "LineNum", "ItemCode", "Quantity", "WhsCode"]
 
-        # Guardar archivos (header=False porque ya los incluimos en el DF)
-        output_cab.to_csv("Salida_Almacen_Cabecera.txt", index=False, header=False, sep='\t', lineterminator='\r\n', encoding='cp1252')
-        output_lin.to_csv("Salida_Almacen_Lineas.txt", index=False, header=False, sep='\t', lineterminator='\r\n', encoding='cp1252')
+        guardar_sap_txt(cab_rows, "Salida_Almacen_Cabecera.txt", desc_cab)
+        guardar_sap_txt(lin_rows, "Salida_Almacen_Lineas.txt", desc_lin)
 
-        print(f"✅ Éxito: Se generaron {doc_num - 1} folios con DOBLE ENCABEZADO.")
+        print(f"✅ Éxito: {doc_num - 1} documentos generados correctamente.")
         files.download("Salida_Almacen_Cabecera.txt")
         files.download("Salida_Almacen_Lineas.txt")
 
