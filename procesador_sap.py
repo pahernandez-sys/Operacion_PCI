@@ -3,7 +3,8 @@ from datetime import datetime
 import re
 from google.colab import files
 import io
-from IPython.display import display, HTML
+import base64
+from IPython.display import HTML, display
 
 def extraer_fecha(texto):
     if pd.isna(texto): return None
@@ -12,6 +13,10 @@ def extraer_fecha(texto):
         dia, mes, anio = match.groups()
         return f"{anio}{mes}{dia}"
     return None
+
+def crear_enlace_descarga(nombre_archivo, contenido):
+    b64 = base64.b64encode(contenido.encode('cp1252')).decode()
+    return f'<a href="data:text/plain;base64,{b64}" download="{nombre_archivo}" style="display:inline-block; background-color:#4CAF50; color:white; padding:10px 20px; text-decoration:none; border-radius:5px; margin:5px;">Descargar {nombre_archivo}</a>'
 
 def procesar_sap_final():
     print("📂 Seleccionando archivo...")
@@ -47,7 +52,8 @@ def procesar_sap_final():
 
             if col3 == "nan" or col3.lower() in ["número de artículo"]: continue
             tecnico_actual = col0 if col0 != "nan" else tecnico_actual
-            
+            if not tecnico_actual: continue
+
             division = str(row[2]).strip() if pd.notna(row[2]) else "METRO"
             item_code = col3.split('.')[0].strip()
             try: cantidad = float(row[5]) if pd.notna(row[5]) else 0
@@ -62,57 +68,27 @@ def procesar_sap_final():
                 }
             mapeo_datos[clave]["Lines"].append({"ItemCode": item_code, "Quantity": cantidad})
 
-        cab_rows, lin_rows = [], []
-        doc_num = 1
+        # --- GENERACIÓN DE CONTENIDO ---
         f_hoy = datetime.now().strftime("%Y%m%d")
+        h_cab = ["DocNum", "ObjType", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "U_COPIA", "Comments"]
+        h_lin = ["ParentKey", "LineNum", "ItemCode", "Quantity", "WhsCode", "U_CONTRATISTA", "U_AREA"]
 
+        cab_txt = '\t'.join(h_cab) + '\r\n' + '\t'.join(h_cab) + '\r\n'
+        lin_txt = '\t'.join(h_lin) + '\r\n' + '\t'.join(h_lin) + '\r\n'
+        
+        doc_num = 1
         for (tec, area), info in mapeo_datos.items():
             f_doc = info["DocDate"] if info["DocDate"] else f_hoy
-            cab_rows.append({
-                "DocNum": doc_num, "ObjType": "60", "DocDate": f_doc, "U_DIVISION": info["U_DIVISION"],
-                "U_AREA": info["U_AREA"], "U_TipoP": "MANTENIMIENTO", "U_CONTRATISTA": info["U_CONTRATISTA"],
-                "U_COPIA": "ORIGINAL", "Comments": info["Comments"]
-            })
-            for idx, ln in enumerate(info["Lines"]):
-                lin_rows.append({
-                    "ParentKey": doc_num, "LineNum": idx, "ItemCode": ln["ItemCode"], "Quantity": ln["Quantity"],
-                    "WhsCode": "CAMARONE", "U_CONTRATISTA": info["U_CONTRATISTA"], "U_AREA": info["U_AREA"]
-                })
+            cab_txt += f"{doc_num}\t60\t{f_doc}\t{info['U_DIVISION']}\t{info['U_AREA']}\tMANTENIMIENTO\t{info['U_CONTRATISTA']}\tORIGINAL\t{info['Comments']}\r\n"
+            for i, ln in enumerate(info["Lines"]):
+                lin_txt += f"{doc_num}\t{i}\t{ln['ItemCode']}\t{ln['Quantity']}\tCAMARONE\t{info['U_CONTRATISTA']}\t{info['U_AREA']}\r\n"
             doc_num += 1
 
-        df_cab = pd.DataFrame(cab_rows)
-        df_lin = pd.DataFrame(lin_rows)
-        df_cab_f = pd.concat([pd.DataFrame([df_cab.columns.tolist()], columns=df_cab.columns), df_cab], ignore_index=True)
-        df_lin_f = pd.concat([pd.DataFrame([df_lin.columns.tolist()], columns=df_lin.columns), df_lin], ignore_index=True)
-
-        df_cab_f.to_csv("Salida_Almacen_Cabecera.txt", index=False, sep='\t', lineterminator='\r\n', encoding='cp1252')
-        df_lin_f.to_csv("Salida_Almacen_Lineas.txt", index=False, sep='\t', lineterminator='\r\n', encoding='cp1252')
-
-        print(f"✅ Éxito: {doc_num - 1} folios listos.")
-        
-        # BOTÓN PARA DESCARGAR SIN BLOQUEOS
-        html_button = """
-        <div style="margin-top: 20px; padding: 15px; background-color: #f0fdf4; border: 2px solid #22c55e; border-radius: 10px; text-align: center;">
-            <p style="color: #166534; font-weight: bold; font-family: sans-serif;">¡Proceso terminado!</p>
-            <button onclick="descargar()" style="background-color: #22c55e; color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold;">
-                📥 Descargar archivos para SAP
-            </button>
-        </div>
-        <script>
-            function descargar() {
-                const f = ['Salida_Almacen_Cabecera.txt', 'Salida_Almacen_Lineas.txt'];
-                f.forEach((name, i) => {
-                    setTimeout(() => {
-                        const a = document.createElement('a');
-                        a.href = '/content/' + name;
-                        a.download = name;
-                        a.click();
-                    }, i * 800);
-                });
-            }
-        </script>
-        """
-        display(HTML(html_button))
+        # --- MOSTRAR BOTONES DE DESCARGA ---
+        print(f"✅ Éxito: {doc_num - 1} folios generados.")
+        html_output = crear_enlace_descarga("Salida_Almacen_Cabecera.txt", cab_txt)
+        html_output += crear_enlace_descarga("Salida_Almacen_Lineas.txt", lin_txt)
+        display(HTML(f'<div style="margin-top:20px;">{html_output}</div>'))
 
     except Exception as e:
         print(f"❌ Error: {e}")
