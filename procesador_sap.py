@@ -83,41 +83,49 @@ def procesar_sap_colab_final():
 
         for (tec, area), info in mapeo_datos.items():
             f_doc = info["DocDate"] if info["DocDate"] else fecha_hoy
-            # Datos de Cabecera
-            cab_rows.append({
-                "DocNum": doc_num, "DocDate": f_doc, "U_DIVISION": info["U_DIVISION"],
-                "U_AREA": info["U_AREA"], "U_TipoP": "MANTENIMIENTO",
-                "U_CONTRATISTA": info["U_CONTRATISTA"], "Comments": info["Comments"]
-            })
-            # Datos de Líneas
+            
+            # 1. Preparar Cabecera (Exactamente 7 campos)
+            cab_rows.append([
+                str(doc_num), f_doc, info["U_DIVISION"], info["U_AREA"], 
+                "MANTENIMIENTO", info["U_CONTRATISTA"], info["Comments"]
+            ])
+            
+            # 2. Preparar Líneas (Exactamente 5 campos)
             for idx, ln in enumerate(info["Lines"]):
-                lin_rows.append({
-                    "ParentKey": doc_num, "LineNum": idx, "ItemCode": ln["ItemCode"],
-                    "Quantity": ln["Quantity"], "WhsCode": "CAMARONE"
-                })
+                lin_rows.append([
+                    str(doc_num), str(idx), str(ln["ItemCode"]), 
+                    str(ln["Quantity"]), "CAMARONE"
+                ])
             doc_num += 1
 
         if not cab_rows:
             print("⚠️ No se generaron registros.")
             return
 
-        # --- FUNCIÓN PARA CREAR DOBLE ENCABEZADO SAP ---
-        def guardar_sap_txt(lista_datos, nombre_archivo, descripciones):
-            df = pd.DataFrame(lista_datos)
-            # Fila 1: Nombres técnicos (los del DataFrame)
-            # Fila 2: Nombres descriptivos (los pasados por argumento)
-            df_final = pd.DataFrame([df.columns.tolist(), descripciones])
-            df_final = pd.concat([df_final, df], ignore_index=True)
-            df_final.to_csv(nombre_archivo, index=False, header=False, sep='\t', lineterminator='\r\n', encoding='cp1252')
+        # --- FUNCIÓN DE ESCRITURA MANUAL (EVITA DESALINEACIÓN) ---
+        def escribir_txt_sap(nombre_archivo, encabezado_tecnico, encabezado_sap, filas):
+            with open(nombre_archivo, 'w', encoding='cp1252', newline='') as f:
+                # Escribimos fila 1 (Técnica)
+                f.write('\t'.join(encabezado_tecnico) + '\r\n')
+                # Escribimos fila 2 (SAP/Descriptiva)
+                f.write('\t'.join(encabezado_sap) + '\r\n')
+                # Escribimos los datos
+                for fila in filas:
+                    f.write('\t'.join(fila) + '\r\n')
 
-        # Descripciones requeridas por DTW
-        desc_cab = ["DocNum", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "Comments"]
-        desc_lin = ["ParentKey", "LineNum", "ItemCode", "Quantity", "WhsCode"]
+        # Definición de encabezados para Cabecera
+        h_tec_cab = ["DocNum", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "Comments"]
+        h_sap_cab = ["DocNum", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "Comments"]
 
-        guardar_sap_txt(cab_rows, "Salida_Almacen_Cabecera.txt", desc_cab)
-        guardar_sap_txt(lin_rows, "Salida_Almacen_Lineas.txt", desc_lin)
+        # Definición de encabezados para Líneas
+        h_tec_lin = ["ParentKey", "LineNum", "ItemCode", "Quantity", "WhsCode"]
+        h_sap_lin = ["ParentKey", "LineNum", "ItemCode", "Quantity", "WhsCode"]
 
-        print(f"✅ Éxito: {doc_num - 1} documentos generados correctamente.")
+        # Guardar archivos
+        escribir_txt_sap("Salida_Almacen_Cabecera.txt", h_tec_cab, h_sap_cab, cab_rows)
+        escribir_txt_sap("Salida_Almacen_Lineas.txt", h_tec_lin, h_sap_lin, lin_rows)
+
+        print(f"✅ Éxito: {doc_num - 1} documentos alineados correctamente.")
         files.download("Salida_Almacen_Cabecera.txt")
         files.download("Salida_Almacen_Lineas.txt")
 
