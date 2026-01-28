@@ -3,6 +3,7 @@ from datetime import datetime
 import re
 from google.colab import files
 import io
+from IPython.display import display, HTML
 
 def extraer_fecha(texto):
     if pd.isna(texto): return None
@@ -46,8 +47,7 @@ def procesar_sap_final():
 
             if col3 == "nan" or col3.lower() in ["número de artículo"]: continue
             tecnico_actual = col0 if col0 != "nan" else tecnico_actual
-            if not tecnico_actual: continue
-
+            
             division = str(row[2]).strip() if pd.notna(row[2]) else "METRO"
             item_code = col3.split('.')[0].strip()
             try: cantidad = float(row[5]) if pd.notna(row[5]) else 0
@@ -62,7 +62,7 @@ def procesar_sap_final():
                 }
             mapeo_datos[clave]["Lines"].append({"ItemCode": item_code, "Quantity": cantidad})
 
-        # --- GENERACIÓN DE LISTAS ---
+        # --- GENERACIÓN DE DATAFRAMES ---
         cab_rows, lin_rows = [], []
         doc_num = 1
         f_hoy = datetime.now().strftime("%Y%m%d")
@@ -81,25 +81,43 @@ def procesar_sap_final():
                 })
             doc_num += 1
 
-        # --- TRUCO PARA DOBLE ENCABEZADO CON DATAFRAME ---
+        # Doble encabezado estilo Pandas
         df_cab = pd.DataFrame(cab_rows)
         df_lin = pd.DataFrame(lin_rows)
+        df_cab_final = pd.concat([pd.DataFrame([df_cab.columns.tolist()], columns=df_cab.columns), df_cab], ignore_index=True)
+        df_lin_final = pd.concat([pd.DataFrame([df_lin.columns.tolist()], columns=df_lin.columns), df_lin], ignore_index=True)
 
-        # Creamos una fila extra que es idéntica a los nombres de las columnas
-        df_cab_extra = pd.DataFrame([df_cab.columns.tolist()], columns=df_cab.columns)
-        df_lin_extra = pd.DataFrame([df_lin.columns.tolist()], columns=df_lin.columns)
-
-        # Las pegamos arriba
-        df_cab_final = pd.concat([df_cab_extra, df_cab], ignore_index=True)
-        df_lin_final = pd.concat([df_lin_extra, df_lin], ignore_index=True)
-
-        # Guardar usando el método que sabemos que NO falla
+        # Guardar archivos en el disco de Colab
         df_cab_final.to_csv("Salida_Almacen_Cabecera.txt", index=False, sep='\t', lineterminator='\r\n', encoding='cp1252')
         df_lin_final.to_csv("Salida_Almacen_Lineas.txt", index=False, sep='\t', lineterminator='\r\n', encoding='cp1252')
 
-        print(f"✅ Éxito: {doc_num - 1} folios generados.")
-        files.download("Salida_Almacen_Cabecera.txt")
-        files.download("Salida_Almacen_Lineas.txt")
+        print(f"✅ Éxito: {doc_num - 1} folios listos.")
+        
+        # --- SOLUCIÓN: BOTÓN DE DESCARGA ---
+        html_code = """
+        <div style="background-color: #e6fffa; border: 1px solid #38b2ac; padding: 15px; border-radius: 8px; margin-top: 10px;">
+            <p style="color: #2c7a7b; font-weight: bold; margin-bottom: 10px;">📦 Los archivos están listos para SAP:</p>
+            <button onclick="downloadFiles()" style="background-color: #38b2ac; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 16px;">
+                Descargar TXTs ahora
+            </button>
+        </div>
+        <script>
+            function downloadFiles() {
+                const files = ['Salida_Almacen_Cabecera.txt', 'Salida_Almacen_Lineas.txt'];
+                files.forEach((file, index) => {
+                    setTimeout(() => {
+                        const link = document.createElement('a');
+                        link.href = '/content/' + file;
+                        link.download = file;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    }, index * 1000);
+                });
+            }
+        </script>
+        """
+        display(HTML(html_code))
 
     except Exception as e:
         print(f"❌ Error: {e}")
