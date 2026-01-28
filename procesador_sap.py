@@ -19,18 +19,16 @@ def procesar_sap_colab_final():
     archivo_entrada = list(uploaded.keys())[0]
 
     try:
-        # 1. Procesamiento de Excel
         contenido_archivo = io.BytesIO(uploaded[archivo_entrada])
         excel_file = pd.ExcelFile(contenido_archivo)
-        nombres_hojas = excel_file.sheet_names
         
         dfs_a_concatenar = []
-        for i in range(min(2, len(nombres_hojas))):
-            df_temp = pd.read_excel(excel_file, sheet_name=i, header=None)
-            if df_temp.empty: continue
-            for col_idx in range(7):
-                if col_idx not in df_temp.columns: df_temp[col_idx] = None
-            dfs_a_concatenar.append(df_temp.iloc[:, 0:7])
+        for nombre_hoja in excel_file.sheet_names[:2]:
+            df_temp = pd.read_excel(excel_file, sheet_name=nombre_hoja, header=None)
+            if not df_temp.empty:
+                for col_idx in range(7):
+                    if col_idx not in df_temp.columns: df_temp[col_idx] = None
+                dfs_a_concatenar.append(df_temp.iloc[:, 0:7])
 
         raw_data = pd.concat(dfs_a_concatenar, ignore_index=True)
         mapeo_datos = {}
@@ -75,38 +73,30 @@ def procesar_sap_colab_final():
                 }
             mapeo_datos[clave]["Lines"].append({"ItemCode": item_code, "Quantity": cantidad})
 
-        # 2. Preparación de Filas y Encabezados
+        # --- ESCRITURA DIRECTA ---
         doc_num = 1
-        fecha_hoy = datetime.now().strftime("%Y%m%d")
-        
+        f_hoy = datetime.now().strftime("%Y%m%d")
         h_cab = ["DocNum", "ObjType", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "U_COPIA", "Comments"]
         h_lin = ["ParentKey", "LineNum", "ItemCode", "Quantity", "WhsCode", "U_CONTRATISTA", "U_AREA"]
 
-        # 3. Escritura Directa de Cabecera
-        with open("Salida_Almacen_Cabecera.txt", 'w', encoding='cp1252', newline='') as f_cab:
-            f_cab.write('\t'.join(h_cab) + '\r\n') # Fila 1
-            f_cab.write('\t'.join(h_cab) + '\r\n') # Fila 2
+        with open("Salida_Almacen_Cabecera.txt", 'w', encoding='cp1252', newline='') as fc, \
+             open("Salida_Almacen_Lineas.txt", 'w', encoding='cp1252', newline='') as fl:
             
-            # 4. Escritura Directa de Líneas
-            with open("Salida_Almacen_Lineas.txt", 'w', encoding='cp1252', newline='') as f_lin:
-                f_lin.write('\t'.join(h_lin) + '\r\n') # Fila 1
-                f_lin.write('\t'.join(h_lin) + '\r\n') # Fila 2
-                
-                for (tec, area), info in mapeo_datos.items():
-                    f_doc = info["DocDate"] if info["DocDate"] else fecha_hoy
-                    
-                    # Escribir Cabecera
-                    row_cab = [str(doc_num), "60", f_doc, info["U_DIVISION"], info["U_AREA"], "MANTENIMIENTO", info["U_CONTRATISTA"], "ORIGINAL", info["Comments"]]
-                    f_cab.write('\t'.join(row_cab) + '\r\n')
-                    
-                    # Escribir Líneas
-                    for idx, ln in enumerate(info["Lines"]):
-                        row_lin = [str(doc_num), str(idx), str(ln["ItemCode"]), str(ln["Quantity"]), "CAMARONE", info["U_CONTRATISTA"], info["U_AREA"]]
-                        f_lin.write('\t'.join(row_lin) + '\r\n')
-                    
-                    doc_num += 1
+            fc.write('\t'.join(h_cab) + '\r\n')
+            fc.write('\t'.join(h_cab) + '\r\n')
+            fl.write('\t'.join(h_lin) + '\r\n')
+            fl.write('\t'.join(h_lin) + '\r\n')
 
-        print(f"✅ Éxito: {doc_num - 1} documentos generados.")
+            for (tec, area), info in mapeo_datos.items():
+                f_doc = info["DocDate"] if info["DocDate"] else f_hoy
+                # Cabecera (9 campos)
+                fc.write('\t'.join([str(doc_num), "60", f_doc, info["U_DIVISION"], info["U_AREA"], "MANTENIMIENTO", info["U_CONTRATISTA"], "ORIGINAL", info["Comments"]]) + '\r\n')
+                # Líneas (7 campos)
+                for idx, ln in enumerate(info["Lines"]):
+                    fl.write('\t'.join([str(doc_num), str(idx), str(ln["ItemCode"]), str(ln["Quantity"]), "CAMARONE", info["U_CONTRATISTA"], info["U_AREA"]]) + '\r\n')
+                doc_num += 1
+
+        print(f"✅ Proceso terminado: {doc_num - 1} documentos.")
         files.download("Salida_Almacen_Cabecera.txt")
         files.download("Salida_Almacen_Lineas.txt")
 
