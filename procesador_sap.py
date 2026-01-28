@@ -96,10 +96,11 @@ def procesar_sap_colab_final():
                 ])
             doc_num += 1
 
+        # Función de escritura dentro del ámbito de la función principal
         def escribir_txt_sap(nombre_archivo, encabezado, filas):
             with open(nombre_archivo, 'w', encoding='cp1252', newline='') as f:
-                f.write('\t'.join(encabezado) + '\r\n') # Fila 1
-                f.write('\t'.join(encabezado) + '\r\n') # Fila 2
+                f.write('\t'.join(encabezado) + '\r\n') # Fila 1 Técnica
+                f.write('\t'.join(encabezado) + '\r\n') # Fila 2 SAP
                 for fila in filas:
                     f.write('\t'.join(fila) + '\r\n')
 
@@ -109,12 +110,12 @@ def procesar_sap_colab_final():
         escribir_txt_sap("Salida_Almacen_Cabecera.txt", h_cab, cab_rows)
         escribir_txt_sap("Salida_Almacen_Lineas.txt", h_lin, lin_rows)
 
-        print(f"✅ Éxito: {doc_num - 1} documentos listos.")
+        print(f"✅ Éxito: {doc_num - 1} folios creados.")
         files.download("Salida_Almacen_Cabecera.txt")
         files.download("Salida_Almacen_Lineas.txt")
 
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ Error durante el proceso: {e}")
 
-# Ejecutar la función
+# Llamada a la función
 procesar_sap_colab_final()
