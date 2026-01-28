@@ -19,6 +19,7 @@ def procesar_sap_colab_final():
     archivo_entrada = list(uploaded.keys())[0]
 
     try:
+        # --- 1. CARGA Y CONCATENACIÓN ---
         contenido_archivo = io.BytesIO(uploaded[archivo_entrada])
         excel_file = pd.ExcelFile(contenido_archivo)
         nombres_hojas = excel_file.sheet_names
@@ -36,6 +37,7 @@ def procesar_sap_colab_final():
         tecnico_actual = None
         area_actual = "GENERAL"
 
+        # --- 2. EXTRACCIÓN DE LOGICA ---
         for _, row in raw_data.iterrows():
             col0 = str(row[0]).strip() if pd.notna(row[0]) else ""
             col1 = str(row[1]).strip() if pd.notna(row[1]) else ""
@@ -75,7 +77,7 @@ def procesar_sap_colab_final():
                 }
             mapeo_datos[clave]["Lines"].append({"ItemCode": item_code, "Quantity": cantidad})
 
-        # --- GENERACIÓN DE DATOS ---
+        # --- 3. GENERACIÓN DE FILAS ---
         cab_rows = []
         lin_rows = []
         doc_num = 1
@@ -83,12 +85,12 @@ def procesar_sap_colab_final():
 
         for (tec, area), info in mapeo_datos.items():
             f_doc = info["DocDate"] if info["DocDate"] else fecha_hoy
-            # Cabecera (9 columnas)
+            # Cabecera (9 campos)
             cab_rows.append([
                 str(doc_num), "60", f_doc, info["U_DIVISION"], info["U_AREA"],
                 "MANTENIMIENTO", info["U_CONTRATISTA"], "ORIGINAL", info["Comments"]
             ])
-            # Líneas (7 columnas)
+            # Líneas (7 campos)
             for idx, ln in enumerate(info["Lines"]):
                 lin_rows.append([
                     str(doc_num), str(idx), str(ln["ItemCode"]), str(ln["Quantity"]),
@@ -96,26 +98,26 @@ def procesar_sap_colab_final():
                 ])
             doc_num += 1
 
-        # Función de escritura dentro del ámbito de la función principal
-        def escribir_txt_sap(nombre_archivo, encabezado, filas):
-            with open(nombre_archivo, 'w', encoding='cp1252', newline='') as f:
-                f.write('\t'.join(encabezado) + '\r\n') # Fila 1 Técnica
-                f.write('\t'.join(encabezado) + '\r\n') # Fila 2 SAP
+        # --- 4. FUNCIÓN DE ESCRITURA Y DESCARGA ---
+        def guardar_txt(nombre, encabezado, filas):
+            with open(nombre, 'w', encoding='cp1252', newline='') as f:
+                f.write('\t'.join(encabezado) + '\r\n') # Fila 1
+                f.write('\t'.join(encabezado) + '\r\n') # Fila 2
                 for fila in filas:
                     f.write('\t'.join(fila) + '\r\n')
 
         h_cab = ["DocNum", "ObjType", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "U_COPIA", "Comments"]
         h_lin = ["ParentKey", "LineNum", "ItemCode", "Quantity", "WhsCode", "U_CONTRATISTA", "U_AREA"]
 
-        escribir_txt_sap("Salida_Almacen_Cabecera.txt", h_cab, cab_rows)
-        escribir_txt_sap("Salida_Almacen_Lineas.txt", h_lin, lin_rows)
+        guardar_txt("Salida_Almacen_Cabecera.txt", h_cab, cab_rows)
+        guardar_txt("Salida_Almacen_Lineas.txt", h_lin, lin_rows)
 
-        print(f"✅ Éxito: {doc_num - 1} folios creados.")
+        print(f"✅ Éxito: {doc_num - 1} documentos generados.")
         files.download("Salida_Almacen_Cabecera.txt")
         files.download("Salida_Almacen_Lineas.txt")
 
     except Exception as e:
-        print(f"❌ Error durante el proceso: {e}")
+        print(f"❌ Error crítico en el proceso: {e}")
 
-# Llamada a la función
+# Ejecución final
 procesar_sap_colab_final()
