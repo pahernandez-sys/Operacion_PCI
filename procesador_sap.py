@@ -4,6 +4,7 @@ import re
 from google.colab import files
 import io
 import base64
+import zipfile
 from IPython.display import HTML, display
 
 def extraer_fecha(texto):
@@ -14,16 +15,10 @@ def extraer_fecha(texto):
         return f"{anio}{mes}{dia}"
     return None
 
-def crear_enlace_descarga(nombre_archivo, contenido):
-    b64 = base64.b64encode(contenido.encode('cp1252')).decode()
-    return f'<a href="data:text/plain;base64,{b64}" download="{nombre_archivo}" style="display:inline-block; background-color:#4CAF50; color:white; padding:10px 20px; text-decoration:none; border-radius:5px; margin:5px; font-family:sans-serif;">Descargar {nombre_archivo}</a>'
-
 def procesar_sap_final():
     print("📂 Seleccionando archivo...")
     uploaded = files.upload()
-    if not uploaded: 
-        print("❌ No se seleccionó ningún archivo.")
-        return
+    if not uploaded: return
     
     archivo_entrada = list(uploaded.keys())[0]
 
@@ -46,17 +41,13 @@ def procesar_sap_final():
         for _, row in raw_data.iterrows():
             col0, col1, col3 = str(row[0]).strip(), str(row[1]).strip(), str(row[3]).strip()
             if any(x in col0 for x in ["Contratista", "ENTRADAS", "SALIDAS"]) or (col0=="nan" and col1=="nan" and col3=="nan"): continue
-            
-            if col1 != "nan" and col3 != "nan" and col1.lower() not in ["area", "division"]:
-                area_actual = col1
+            if col1 != "nan" and col3 != "nan" and col1.lower() not in ["area", "division"]: area_actual = col1
             elif col0 != "nan" and col3 == "nan":
                 temp_area = re.sub(r'(COBRE|FIBRA|FO|CU|SALIDA|ENTRADA|\d{2}/\d{2}/\d{4})\s*', '', col0, flags=re.IGNORECASE).strip()
                 if temp_area: area_actual = temp_area
-
             if col3 == "nan" or col3.lower() in ["número de artículo"]: continue
             tecnico_actual = col0 if col0 != "nan" else tecnico_actual
-            if not tecnico_actual: continue
-
+            
             division = str(row[2]).strip() if pd.notna(row[2]) else "METRO"
             item_code = col3.split('.')[0].strip()
             try: cantidad = float(row[5]) if pd.notna(row[5]) else 0
@@ -71,7 +62,7 @@ def procesar_sap_final():
                 }
             mapeo_datos[clave]["Lines"].append({"ItemCode": item_code, "Quantity": cantidad})
 
-        # --- ESTRUCTURA SAP ---
+        # --- ESTRUCTURA TXT ---
         f_hoy = datetime.now().strftime("%Y%m%d")
         h_cab = ["DocNum", "ObjType", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "U_COPIA", "Comments"]
         h_lin = ["ParentKey", "LineNum", "ItemCode", "Quantity", "WhsCode", "U_CONTRATISTA", "U_AREA"]
@@ -87,24 +78,33 @@ def procesar_sap_final():
                 lin_txt += f"{doc_num}\t{i}\t{ln['ItemCode']}\t{ln['Quantity']}\tCAMARONE\t{info['U_CONTRATISTA']}\t{info['U_AREA']}\r\n"
             doc_num += 1
 
-        # --- MOSTRAR RESULTADOS Y CERRAR ---
-        print(f"✅ Proceso terminado: {doc_num - 1} folios.")
-        html_btns = crear_enlace_descarga("Salida_Almacen_Cabecera.txt", cab_txt)
-        html_btns += crear_enlace_descarga("Salida_Almacen_Lineas.txt", lin_txt)
+        # --- CREAR ZIP EN MEMORIA ---
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+            zip_file.writestr("Salida_Almacen_Cabecera.txt", cab_txt.encode('cp1252'))
+            zip_file.writestr("Salida_Almacen_Lineas.txt", lin_txt.encode('cp1252'))
         
-        display(HTML(f'''
-            <div style="border:2px solid #4CAF50; padding:15px; border-radius:10px; background-color:#f9fff9; margin-top:10px;">
-                <strong style="color:#2e7d32;">¡Archivos Listos!</strong><br>
-                Haz clic en los botones para descargar. La celda se detendrá automáticamente.
-                <div style="margin-top:10px;">{html_btns}</div>
+        # Codificar ZIP a Base64 para el botón
+        b64_zip = base64.b64encode(zip_buffer.getvalue()).decode()
+        zip_name = f"Carga_SAP_{f_hoy}.zip"
+
+        # --- INTERFAZ FINAL ---
+        print(f"✅ Éxito: {doc_num - 1} folios procesados.")
+        
+        html_code = f'''
+            <div style="background-color: #f0fdf4; border: 2px solid #22c55e; padding: 20px; border-radius: 12px; text-align: center; margin-top: 10px;">
+                <p style="color: #166534; font-weight: bold; font-family: sans-serif; margin-bottom: 15px;">📦 Paquete SAP listo</p>
+                <a href="data:application/zip;base64,{b64_zip}" download="{zip_name}" 
+                   onclick="setTimeout(() => {{ window.location.reload(); }}, 1000);"
+                   style="background-color: #22c55e; color: white; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-family: sans-serif; display: inline-block;">
+                    📥 Descargar archivos y finalizar
+                </a>
+                <p style="font-size: 11px; color: #666; margin-top: 10px;">(El proceso se detendrá automáticamente tras la descarga)</p>
             </div>
-        '''))
+        '''
+        display(HTML(html_code))
 
     except Exception as e:
         print(f"❌ Error: {e}")
-    
-    # Esto fuerza el fin de la ejecución de la celda
-    return
 
-# Ejecutar proceso
 procesar_sap_final()
