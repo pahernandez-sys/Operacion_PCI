@@ -8,6 +8,10 @@ from google.colab import output
 import ipywidgets as widgets
 from IPython.display import display
 
+# --- VARIABLES GLOBALES PARA ALMACENAR EL ARCHIVO ---
+archivo_cargado = None
+nombre_archivo_global = ""
+
 def extraer_fecha(texto):
     if pd.isna(texto): return None
     match = re.search(r'(\d{2})/(\d{2})/(\d{4})', str(texto))
@@ -17,29 +21,22 @@ def extraer_fecha(texto):
     return None
 
 def guardar_txt_sap(df, nombre_archivo, h2):
-    # Separador punto y coma para que Excel lo abra directo en columnas
-    sep = ';' 
+    sep = ';' # Punto y coma para Excel
     with open(nombre_archivo, 'w', encoding='cp1252', newline='') as f:
         f.write(sep.join(df.columns) + '\n')
         f.write(sep.join(h2) + '\n')
-        # Generar contenido CSV como string para evitar errores de lineterminator
         csv_content = df.to_csv(sep=sep, index=False, header=False)
         f.write(csv_content)
 
-def ejecutar_proceso_completo(b):
-    output.clear()
-    print("📂 Selecciona tu archivo Excel...")
-    uploaded = files.upload()
-    
-    if not uploaded:
-        print("⚠️ No se seleccionó archivo.")
+def procesar_logica_sap(b):
+    global archivo_cargado, nombre_archivo_global
+    if archivo_cargado is None:
+        print("❌ No hay archivo en memoria.")
         return
 
-    archivo_nombre = list(uploaded.keys())[0]
-    
     try:
-        print(f"⚙️ Procesando '{archivo_nombre}'...")
-        contenido = io.BytesIO(uploaded[archivo_nombre])
+        print(f"⚙️ Procesando '{nombre_archivo_global}'...")
+        contenido = io.BytesIO(archivo_cargado)
         excel_file = pd.ExcelFile(contenido)
         
         dfs_a_concatenar = []
@@ -108,26 +105,36 @@ def ejecutar_proceso_completo(b):
                 })
             doc_num += 1
 
-        # Headers fila 2
-        h2_cab = ["DocNum", "ObjType", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "U_COPIA", "Comments"]
-        h2_lin = ["DocNum", "LineNum", "ItemCode", "Quantity", "WhsCode", "U_CONTRATISTA", "U_AREA"]
+        guardar_txt_sap(pd.DataFrame(cabecera_final), "Salida_Almacen_Cabecera.txt", 
+                        ["DocNum", "ObjType", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "U_COPIA", "Comments"])
+        guardar_txt_sap(pd.DataFrame(lineas_final), "Salida_Almacen_Lineas.txt", 
+                        ["DocNum", "LineNum", "ItemCode", "Quantity", "WhsCode", "U_CONTRATISTA", "U_AREA"])
 
-        # Guardar
-        guardar_txt_sap(pd.DataFrame(cabecera_final), "Salida_Almacen_Cabecera.txt", h2_cab)
-        guardar_txt_sap(pd.DataFrame(lineas_final), "Salida_Almacen_Lineas.txt", h2_lin)
-
-        print(f"✅ ¡Éxito! {doc_num - 1} documentos listos.")
-        print("📥 Iniciando descargas...")
-        
+        print(f"✅ Éxito! {doc_num - 1} documentos creados.")
         time.sleep(1)
         files.download("Salida_Almacen_Cabecera.txt")
         time.sleep(1)
         files.download("Salida_Almacen_Lineas.txt")
+        print("📥 Descargando...")
 
     except Exception as e:
         print(f"❌ Error: {e}")
 
-# Crear botón para disparar el proceso
-boton = widgets.Button(description="Seleccionar Excel y Procesar", button_style='primary', layout=widgets.Layout(width='300px'))
-boton.on_click(ejecutar_proceso_completo)
-display(boton)
+# --- PASO 1: CARGAR ARCHIVO ---
+print("1️⃣ Sube tu archivo Excel aquí:")
+subida = files.upload()
+
+if subida:
+    nombre_archivo_global = list(subida.keys())[0]
+    archivo_cargado = subida[nombre_archivo_global]
+    
+    # --- PASO 2: MOSTRAR BOTÓN DE PROCESAR ---
+    output.clear() # Limpiamos el widget de subida para que no bloquee
+    print(f"📂 Archivo '{nombre_archivo_global}' listo en memoria.")
+    print("2️⃣ Ahora haz clic abajo para generar y descargar:")
+    
+    boton_proc = widgets.Button(description="Generar TXT y Descargar", 
+                               button_style='success', 
+                               layout=widgets.Layout(width='300px', height='50px'))
+    boton_proc.on_click(procesar_logica_sap)
+    display(boton_proc)
