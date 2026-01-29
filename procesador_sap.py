@@ -3,6 +3,7 @@ from datetime import datetime
 import re
 from google.colab import files
 import io
+import time
 
 def extraer_fecha(texto):
     if pd.isna(texto): return None
@@ -13,13 +14,18 @@ def extraer_fecha(texto):
     return None
 
 def procesar_sap_colab_final():
-    print("📂 Seleccionando archivo Excel...")
+    print("📂 Por favor, selecciona el archivo Excel...")
+    
+    # 1. CARGA DE ARCHIVO
     uploaded = files.upload()
+    
     if not uploaded: 
-        print("❌ Operación cancelada.")
+        print("⚠️ No se seleccionó ningún archivo.")
         return
     
+    # Obtener el nombre del archivo cargado
     archivo_entrada = list(uploaded.keys())[0]
+    print(f"✅ Archivo '{archivo_entrada}' cargado correctamente. Procesando...")
 
     try:
         contenido_archivo = io.BytesIO(uploaded[archivo_entrada])
@@ -98,18 +104,12 @@ def procesar_sap_colab_final():
                 })
             doc_num += 1
 
-        # --- SOLUCIÓN DEFINITIVA PARA GUARDADO ---
+        # 2. FUNCIÓN DE GUARDADO (PUNTO Y COMA PARA EXCEL)
         def guardar_txt_sap(df, nombre_archivo, h2):
-            # Usamos punto y coma (;) para que Excel lo separe solo
-            # y newline='' para evitar las filas en blanco
             sep = ';' 
             with open(nombre_archivo, 'w', encoding='cp1252', newline='') as f:
-                # Fila 1
                 f.write(sep.join(df.columns) + '\n')
-                # Fila 2
                 f.write(sep.join(h2) + '\n')
-                # Datos (eliminamos el parámetro problemático lineterminator)
-                # y dejamos que el manejador de archivos de python haga el trabajo
                 csv_txt = df.to_csv(sep=sep, index=False, header=False)
                 f.write(csv_txt)
 
@@ -119,12 +119,16 @@ def procesar_sap_colab_final():
         guardar_txt_sap(pd.DataFrame(cabecera_final), "Salida_Almacen_Cabecera.txt", h2_cab)
         guardar_txt_sap(pd.DataFrame(lineas_final), "Salida_Almacen_Lineas.txt", h2_lin)
 
-        print(f"✅ ¡Completado! {doc_num - 1} documentos listos.")
+        print(f"✅ Proceso finalizado. Se generaron {doc_num - 1} documentos.")
+        
+        # 3. DESCARGA AUTOMÁTICA CON PAUSA
+        time.sleep(1) # Pausa técnica para que Colab refresque el sistema de archivos
         files.download("Salida_Almacen_Cabecera.txt")
         files.download("Salida_Almacen_Lineas.txt")
+        print("📥 Descargando archivos...")
 
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ Error durante el proceso: {e}")
 
-# Ejecutar proceso
+# Iniciar proceso
 procesar_sap_colab_final()
