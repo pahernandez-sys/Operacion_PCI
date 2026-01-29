@@ -4,6 +4,7 @@ import re
 from google.colab import files
 import io
 import time
+from google.colab import output
 
 def extraer_fecha(texto):
     if pd.isna(texto): return None
@@ -14,6 +15,8 @@ def extraer_fecha(texto):
     return None
 
 def procesar_sap_colab_final():
+    # Limpiar cualquier salida previa para evitar confusiones
+    output.clear()
     print("📂 Por favor, selecciona el archivo Excel...")
     
     # 1. CARGA DE ARCHIVO
@@ -23,9 +26,8 @@ def procesar_sap_colab_final():
         print("⚠️ No se seleccionó ningún archivo.")
         return
     
-    # Obtener el nombre del archivo cargado
     archivo_entrada = list(uploaded.keys())[0]
-    print(f"✅ Archivo '{archivo_entrada}' cargado correctamente. Procesando...")
+    print(f"✅ Procesando: {archivo_entrada}")
 
     try:
         contenido_archivo = io.BytesIO(uploaded[archivo_entrada])
@@ -104,7 +106,6 @@ def procesar_sap_colab_final():
                 })
             doc_num += 1
 
-        # 2. FUNCIÓN DE GUARDADO (PUNTO Y COMA PARA EXCEL)
         def guardar_txt_sap(df, nombre_archivo, h2):
             sep = ';' 
             with open(nombre_archivo, 'w', encoding='cp1252', newline='') as f:
@@ -121,14 +122,19 @@ def procesar_sap_colab_final():
 
         print(f"✅ Proceso finalizado. Se generaron {doc_num - 1} documentos.")
         
-        # 3. DESCARGA AUTOMÁTICA CON PAUSA
-        time.sleep(1) # Pausa técnica para que Colab refresque el sistema de archivos
+        # --- EL TRUCO PARA LA DESCARGA AUTOMÁTICA ---
+        # 1. Limpiamos el widget de carga de archivos (para que no bloquee)
+        output.clear(wait=True)
+        print("📥 Descargando archivos generados...")
+        
+        # 2. Pequeñas pausas para que el navegador no bloquee las descargas múltiples
+        time.sleep(1)
         files.download("Salida_Almacen_Cabecera.txt")
+        time.sleep(1)
         files.download("Salida_Almacen_Lineas.txt")
-        print("📥 Descargando archivos...")
 
     except Exception as e:
         print(f"❌ Error durante el proceso: {e}")
 
-# Iniciar proceso
+# Iniciar
 procesar_sap_colab_final()
