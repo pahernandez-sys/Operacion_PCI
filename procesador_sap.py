@@ -8,9 +8,9 @@ from google.colab import output
 import ipywidgets as widgets
 from IPython.display import display
 
-# --- VARIABLES GLOBALES PARA ALMACENAR EL ARCHIVO ---
-archivo_cargado = None
-nombre_archivo_global = ""
+# Variables globales
+data_excel = None
+nombre_excel = ""
 
 def extraer_fecha(texto):
     if pd.isna(texto): return None
@@ -20,23 +20,18 @@ def extraer_fecha(texto):
         return f"{anio}{mes}{dia}"
     return None
 
-def guardar_txt_sap(df, nombre_archivo, h2):
-    sep = ';' # Punto y coma para Excel
-    with open(nombre_archivo, 'w', encoding='cp1252', newline='') as f:
-        f.write(sep.join(df.columns) + '\n')
-        f.write(sep.join(h2) + '\n')
-        csv_content = df.to_csv(sep=sep, index=False, header=False)
-        f.write(csv_content)
-
-def procesar_logica_sap(b):
-    global archivo_cargado, nombre_archivo_global
-    if archivo_cargado is None:
-        print("❌ No hay archivo en memoria.")
+def procesar_y_descargar(b):
+    global data_excel, nombre_excel
+    output.clear()
+    
+    if data_excel is None:
+        print("❌ Error: No se detectó archivo. Por favor, reinicia la celda.")
         return
 
     try:
-        print(f"⚙️ Procesando '{nombre_archivo_global}'...")
-        contenido = io.BytesIO(archivo_cargado)
+        print(f"🚀 Procesando '{nombre_excel}'...")
+        # Lógica de procesamiento (tu código original)
+        contenido = io.BytesIO(data_excel)
         excel_file = pd.ExcelFile(contenido)
         
         dfs_a_concatenar = []
@@ -49,8 +44,7 @@ def procesar_logica_sap(b):
 
         raw_data = pd.concat(dfs_a_concatenar, ignore_index=True)
         mapeo_datos = {}
-        tecnico_actual = None
-        area_actual = "GENERAL"
+        tecnico_actual, area_actual = None, "GENERAL"
 
         for _, row in raw_data.iterrows():
             col0 = str(row[0]).strip() if pd.notna(row[0]) else ""
@@ -105,12 +99,20 @@ def procesar_logica_sap(b):
                 })
             doc_num += 1
 
-        guardar_txt_sap(pd.DataFrame(cabecera_final), "Salida_Almacen_Cabecera.txt", 
-                        ["DocNum", "ObjType", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "U_COPIA", "Comments"])
-        guardar_txt_sap(pd.DataFrame(lineas_final), "Salida_Almacen_Lineas.txt", 
-                        ["DocNum", "LineNum", "ItemCode", "Quantity", "WhsCode", "U_CONTRATISTA", "U_AREA"])
+        # Lógica de guardado (Doble Header)
+        def guardar(df, nombre, h2):
+            sep = ';'
+            with open(nombre, 'w', encoding='cp1252', newline='') as f:
+                f.write(sep.join(df.columns) + '\n')
+                f.write(sep.join(h2) + '\n')
+                f.write(df.to_csv(sep=sep, index=False, header=False))
 
-        print(f"✅ Éxito! {doc_num - 1} documentos creados.")
+        guardar(pd.DataFrame(cabecera_final), "Salida_Almacen_Cabecera.txt", 
+                ["DocNum", "ObjType", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "U_COPIA", "Comments"])
+        guardar(pd.DataFrame(lineas_final), "Salida_Almacen_Lineas.txt", 
+                ["DocNum", "LineNum", "ItemCode", "Quantity", "WhsCode", "U_CONTRATISTA", "U_AREA"])
+
+        print(f"✅ ¡Archivos listos! Se procesaron {doc_num - 1} folios.")
         time.sleep(1)
         files.download("Salida_Almacen_Cabecera.txt")
         time.sleep(1)
@@ -120,21 +122,17 @@ def procesar_logica_sap(b):
     except Exception as e:
         print(f"❌ Error: {e}")
 
-# --- PASO 1: CARGAR ARCHIVO ---
-print("1️⃣ Sube tu archivo Excel aquí:")
+# --- FLUJO PRINCIPAL ---
+print("1️⃣ Sube el archivo Excel:")
 subida = files.upload()
 
 if subida:
-    nombre_archivo_global = list(subida.keys())[0]
-    archivo_cargado = subida[nombre_archivo_global]
+    nombre_excel = list(subida.keys())[0]
+    data_excel = subida[nombre_excel]
     
-    # --- PASO 2: MOSTRAR BOTÓN DE PROCESAR ---
-    output.clear() # Limpiamos el widget de subida para que no bloquee
-    print(f"📂 Archivo '{nombre_archivo_global}' listo en memoria.")
-    print("2️⃣ Ahora haz clic abajo para generar y descargar:")
-    
-    boton_proc = widgets.Button(description="Generar TXT y Descargar", 
-                               button_style='success', 
-                               layout=widgets.Layout(width='300px', height='50px'))
-    boton_proc.on_click(procesar_logica_sap)
-    display(boton_proc)
+    # Creamos un botón que el usuario debe presionar para continuar
+    # Esto 'limpia' el estado de bloqueo de la subida
+    print("\n✅ Carga al 100%.")
+    btn = widgets.Button(description="2️⃣ Finalizar y Descargar", button_style='success', layout=widgets.Layout(width='300px', height='50px'))
+    btn.on_click(procesar_y_descargar)
+    display(btn)
