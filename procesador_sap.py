@@ -16,12 +16,13 @@ def procesar_sap_colab_final():
     print("📂 Seleccionando archivo...")
     uploaded = files.upload()
     if not uploaded: 
-        print("❌ Carga cancelada.")
+        print("❌ No se seleccionó archivo.")
         return
     
     archivo_entrada = list(uploaded.keys())[0]
 
     try:
+        # 1. CARGA DE DATOS
         contenido_archivo = io.BytesIO(uploaded[archivo_entrada])
         excel_file = pd.ExcelFile(contenido_archivo)
         nombres_hojas = excel_file.sheet_names
@@ -39,6 +40,7 @@ def procesar_sap_colab_final():
         tecnico_actual = None
         area_actual = "GENERAL"
 
+        # 2. PROCESAMIENTO LOGICO
         for _, row in raw_data.iterrows():
             col0 = str(row[0]).strip() if pd.notna(row[0]) else ""
             col1 = str(row[1]).strip() if pd.notna(row[1]) else ""
@@ -72,15 +74,13 @@ def procesar_sap_colab_final():
             clave = (tecnico_actual, area_actual)
             if clave not in mapeo_datos:
                 mapeo_datos[clave] = {
-                    "U_DIVISION": division,
-                    "U_AREA": area_actual,
-                    "U_CONTRATISTA": tecnico_actual,
-                    "Comments": comentarios,
-                    "DocDate": fecha_comentario,
-                    "Lines": []
+                    "U_DIVISION": division, "U_AREA": area_actual,
+                    "U_CONTRATISTA": tecnico_actual, "Comments": comentarios,
+                    "DocDate": fecha_comentario, "Lines": []
                 }
             mapeo_datos[clave]["Lines"].append({"ItemCode": item_code, "Quantity": int(cantidad)})
 
+        # 3. PREPARACIÓN DE TABLAS
         cabecera_final, lineas_final = [], []
         doc_num = 1
         fecha_hoy = datetime.now().strftime("%Y%m%d")
@@ -101,31 +101,30 @@ def procesar_sap_colab_final():
                 })
             doc_num += 1
 
-        # --- LÓGICA DE GUARDADO CORREGIDA ---
-        def guardar_formato_sap(df, nombre_archivo, headers_fila2):
-            # Usamos separador de COMA para que Excel lo abra en columnas directo
-            # Si SAP requiere TAB, cambiar sep=',' por sep='\t'
-            separador = ',' 
+        # 4. FUNCIÓN DE GUARDADO (SIN ERROR DE lineterminator)
+        def guardar_txt_sap(df, nombre_archivo, headers_fila2):
+            # Cambiado lineterminator para evitar filas vacías y error de Pandas
             with open(nombre_archivo, 'w', encoding='cp1252', newline='') as f:
-                # Escribir Fila 1 (Técnica)
-                f.write(separador.join(df.columns) + '\n')
-                # Escribir Fila 2 (Template)
-                f.write(separador.join(headers_fila2) + '\n')
-                # Escribir Datos (Corregido 'lineterminator')
-                df.to_csv(f, sep=separador, index=False, header=False, lineterminator='\n')
+                # Fila 1: Nombres Técnicos
+                f.write('\t'.join(df.columns) + '\n')
+                # Fila 2: Etiquetas de Template
+                f.write('\t'.join(headers_fila2) + '\n')
+                # Datos: 
+                # Nota: Usamos lineterminator='\n' (estándar moderno)
+                df.to_csv(f, sep='\t', index=False, header=False, lineterminator='\n')
 
         h2_cab = ["DocNum", "ObjType", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "U_COPIA", "Comments"]
         h2_lin = ["DocNum", "LineNum", "ItemCode", "Quantity", "WhsCode", "U_CONTRATISTA", "U_AREA"]
 
-        guardar_formato_sap(pd.DataFrame(cabecera_final), "Salida_Almacen_Cabecera.txt", h2_cab)
-        guardar_formato_sap(pd.DataFrame(lineas_final), "Salida_Almacen_Lineas.txt", h2_lin)
+        guardar_txt_sap(pd.DataFrame(cabecera_final), "Salida_Almacen_Cabecera.txt", h2_cab)
+        guardar_txt_sap(pd.DataFrame(lineas_final), "Salida_Almacen_Lineas.txt", h2_lin)
 
-        print(f"✅ Proceso terminado. Se generaron {doc_num - 1} documentos.")
+        print(f"✅ Éxito: Se generaron {doc_num - 1} documentos.")
         files.download("Salida_Almacen_Cabecera.txt")
         files.download("Salida_Almacen_Lineas.txt")
 
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ Error detectado: {e}")
 
-# Iniciar
+# Ejecutar
 procesar_sap_colab_final()
