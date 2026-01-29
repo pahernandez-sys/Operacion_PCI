@@ -5,6 +5,8 @@ from google.colab import files
 import io
 import time
 from google.colab import output
+import ipywidgets as widgets
+from IPython.display import display
 
 def extraer_fecha(texto):
     if pd.isna(texto): return None
@@ -14,28 +16,34 @@ def extraer_fecha(texto):
         return f"{anio}{mes}{dia}"
     return None
 
-def procesar_sap_colab_final():
-    # Limpiar cualquier salida previa para evitar confusiones
+def guardar_txt_sap(df, nombre_archivo, h2):
+    # Separador punto y coma para que Excel lo abra directo en columnas
+    sep = ';' 
+    with open(nombre_archivo, 'w', encoding='cp1252', newline='') as f:
+        f.write(sep.join(df.columns) + '\n')
+        f.write(sep.join(h2) + '\n')
+        # Generar contenido CSV como string para evitar errores de lineterminator
+        csv_content = df.to_csv(sep=sep, index=False, header=False)
+        f.write(csv_content)
+
+def ejecutar_proceso_completo(b):
     output.clear()
-    print("📂 Por favor, selecciona el archivo Excel...")
-    
-    # 1. CARGA DE ARCHIVO
+    print("📂 Selecciona tu archivo Excel...")
     uploaded = files.upload()
     
-    if not uploaded: 
-        print("⚠️ No se seleccionó ningún archivo.")
+    if not uploaded:
+        print("⚠️ No se seleccionó archivo.")
         return
-    
-    archivo_entrada = list(uploaded.keys())[0]
-    print(f"✅ Procesando: {archivo_entrada}")
 
+    archivo_nombre = list(uploaded.keys())[0]
+    
     try:
-        contenido_archivo = io.BytesIO(uploaded[archivo_entrada])
-        excel_file = pd.ExcelFile(contenido_archivo)
-        nombres_hojas = excel_file.sheet_names
-        dfs_a_concatenar = []
+        print(f"⚙️ Procesando '{archivo_nombre}'...")
+        contenido = io.BytesIO(uploaded[archivo_nombre])
+        excel_file = pd.ExcelFile(contenido)
         
-        for i in range(min(2, len(nombres_hojas))):
+        dfs_a_concatenar = []
+        for i in range(min(2, len(excel_file.sheet_names))):
             df_temp = pd.read_excel(excel_file, sheet_name=i, header=None)
             if df_temp.empty: continue
             for col_idx in range(7):
@@ -62,18 +70,12 @@ def procesar_sap_colab_final():
                 if temp_area: area_actual = temp_area
 
             if not col3 or col3.lower() in ["nan", "número de artículo"]: continue
-
             tecnico_actual = col0 if col0 else tecnico_actual
             if not tecnico_actual: continue
 
             division = str(row[2]).strip() if pd.notna(row[2]) else "METRO"
             item_code = col3.split('.')[0].strip()
-            
-            try:
-                cantidad = float(row[5]) if pd.notna(row[5]) else 0
-            except:
-                cantidad = 0
-
+            cantidad = float(row[5]) if pd.notna(row[5]) else 0
             comentarios = str(row[6]).strip() if pd.notna(row[6]) else ""
             fecha_comentario = extraer_fecha(comentarios)
 
@@ -106,35 +108,26 @@ def procesar_sap_colab_final():
                 })
             doc_num += 1
 
-        def guardar_txt_sap(df, nombre_archivo, h2):
-            sep = ';' 
-            with open(nombre_archivo, 'w', encoding='cp1252', newline='') as f:
-                f.write(sep.join(df.columns) + '\n')
-                f.write(sep.join(h2) + '\n')
-                csv_txt = df.to_csv(sep=sep, index=False, header=False)
-                f.write(csv_txt)
-
+        # Headers fila 2
         h2_cab = ["DocNum", "ObjType", "DocDate", "U_DIVISION", "U_AREA", "U_TipoP", "U_CONTRATISTA", "U_COPIA", "Comments"]
         h2_lin = ["DocNum", "LineNum", "ItemCode", "Quantity", "WhsCode", "U_CONTRATISTA", "U_AREA"]
 
+        # Guardar
         guardar_txt_sap(pd.DataFrame(cabecera_final), "Salida_Almacen_Cabecera.txt", h2_cab)
         guardar_txt_sap(pd.DataFrame(lineas_final), "Salida_Almacen_Lineas.txt", h2_lin)
 
-        print(f"✅ Proceso finalizado. Se generaron {doc_num - 1} documentos.")
+        print(f"✅ ¡Éxito! {doc_num - 1} documentos listos.")
+        print("📥 Iniciando descargas...")
         
-        # --- EL TRUCO PARA LA DESCARGA AUTOMÁTICA ---
-        # 1. Limpiamos el widget de carga de archivos (para que no bloquee)
-        output.clear(wait=True)
-        print("📥 Descargando archivos generados...")
-        
-        # 2. Pequeñas pausas para que el navegador no bloquee las descargas múltiples
         time.sleep(1)
         files.download("Salida_Almacen_Cabecera.txt")
         time.sleep(1)
         files.download("Salida_Almacen_Lineas.txt")
 
     except Exception as e:
-        print(f"❌ Error durante el proceso: {e}")
+        print(f"❌ Error: {e}")
 
-# Iniciar
-procesar_sap_colab_final()
+# Crear botón para disparar el proceso
+boton = widgets.Button(description="Seleccionar Excel y Procesar", button_style='primary', layout=widgets.Layout(width='300px'))
+boton.on_click(ejecutar_proceso_completo)
+display(boton)
